@@ -1505,6 +1505,14 @@ final class Plugin {
 			}
 		}
 
+		// Backward compatibility: older template content may miss related component metadata.
+		if ( ! $component && 'core/latest-posts' === $block_name && $this->template_component_active( $template_slug, 'related' ) ) {
+			$related_posts = $this->get_related_post_ids();
+			if ( ! empty( $related_posts ) ) {
+				return $this->render_related_posts_block( $related_posts, $block['attrs'] ?? [] );
+			}
+		}
+
 		if ( 'essential-blocks/advanced-tabs' === $block_name ) {
 			$block_content = $this->replace_advanced_tab_titles( $block_content );
 			if ( '' === $block_content ) {
@@ -1755,7 +1763,7 @@ final class Plugin {
 				$title = \__( '(no title)', 'nova-bridge-suite' );
 			}
 
-			$list_items_markup .= '<li>';
+			$list_items_markup .= '<li class="service-cpt-related-card">';
 
 			if ( ! empty( $attributes['displayFeaturedImage'] ) && \has_post_thumbnail( $post ) ) {
 				$image_style = '';
@@ -1784,6 +1792,8 @@ final class Plugin {
 					$featured_image
 				);
 			}
+
+			$list_items_markup .= '<div class="service-cpt-related-card__body">';
 
 			$list_items_markup .= sprintf(
 				'<a class="wp-block-latest-posts__post-title" href="%1$s">%2$s</a>',
@@ -1831,7 +1841,7 @@ final class Plugin {
 				}
 			}
 
-			$list_items_markup .= "</li>\n";
+			$list_items_markup .= "</div></li>\n";
 		}
 
 		if ( $added_excerpt_filter && \function_exists( 'block_core_latest_posts_get_excerpt_length' ) ) {
@@ -1847,7 +1857,8 @@ final class Plugin {
 			$classes[] = 'is-grid';
 		}
 		if ( isset( $attributes['columns'] ) && 'grid' === ( $attributes['postLayout'] ?? '' ) ) {
-			$classes[] = 'columns-' . (int) $attributes['columns'];
+			$requested_columns = max( 1, (int) $attributes['columns'] );
+			$classes[] = 'columns-' . min( $requested_columns, max( 1, count( $recent_posts ) ) );
 		}
 		if ( ! empty( $attributes['displayPostDate'] ) ) {
 			$classes[] = 'has-dates';
@@ -2633,6 +2644,7 @@ final class Plugin {
 				'CTA wide'           => 'cta_wide',
 				'Blocksy - Call to Action' => 'cta_cover',
 				'Faq'                => 'faq',
+				'Related articles'   => 'related',
 				'Related Articles'   => 'related',
 			];
 
