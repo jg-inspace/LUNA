@@ -307,6 +307,11 @@ function nova_bridge_suite_get_recommended_modules(): array {
             'description' => 'Avada detected. Enable the bridge to update Avada Builder pages.',
             'plugins'     => [ 'fusion-builder/fusion-builder.php', 'avada-builder/avada-builder.php' ],
         ],
+        'gutenberg_bridge'       => [
+            'label'       => 'Enable Gutenberg bridge',
+            'description' => 'Gutenberg detected. Enable the bridge to update Gutenberg pages.',
+            'plugins'     => [ 'gutenberg/gutenberg.php' ],
+        ],
         'multilingual_wpml'      => [
             'label'       => 'Enable WPML bridge',
             'description' => 'WPML detected. Enable the bridge to manage translations.',
@@ -576,7 +581,7 @@ function nova_bridge_suite_register_settings(): void {
         [
             'key'         => 'gutenberg_bridge',
             'label'       => 'Enable Gutenberg bridge',
-            'description' => 'REST bridge for Gutenberg posts & pages - create, update, HTML-to-block conversion, SEO meta, featured images.',
+            'description' => 'REST bridge for Gutenberg pages.',
         ]
     );
 
