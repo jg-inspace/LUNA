@@ -42,6 +42,10 @@ function nova_bridge_suite_module_definitions(): array {
             'path'                 => 'modules/post-resolver/nova-post-resolver.php',
             'standalone_filenames' => [ 'nova-post-resolver.php' ],
         ],
+        'gutenberg_bridge'       => [
+            'path'                 => 'modules/gutenberg/nova-gutenberg-bridge.php',
+            'standalone_filenames' => [ 'nova-gutenberg-bridge.php' ],
+        ],
     ];
 }
 
@@ -564,6 +568,19 @@ function nova_bridge_suite_register_settings(): void {
             'key'         => 'pagebuilder_avada',
             'label'       => 'Enable Avada bridge',
             'description' => 'REST bridge for Avada Builder pages.',
+        ]
+    );
+
+    add_settings_field(
+        'nova_bridge_gutenberg',
+        'Gutenberg',
+        'nova_bridge_suite_render_checkbox_field',
+        'nova-settings',
+        'nova_bridge_pagebuilders',
+        [
+            'key'         => 'gutenberg_bridge',
+            'label'       => 'Enable Gutenberg bridge',
+            'description' => 'REST bridge for Gutenberg posts & pages — create, update, HTML-to-block conversion, SEO meta, featured images.',
         ]
     );
 
