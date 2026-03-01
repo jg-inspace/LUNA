@@ -113,6 +113,21 @@ if (!function_exists('cf_tmrb_sanitize_deep')) {
     }
     return $k;
   }
+  function cf_tmrb_is_list_array($arr) {
+    if (!is_array($arr)) return false;
+    return function_exists('array_is_list')
+      ? array_is_list($arr)
+      : array_keys($arr) === range(0, count($arr) - 1);
+  }
+  function cf_tmrb_merge_meta_value($existing, $incoming) {
+    if (!is_array($existing) || !is_array($incoming)) return $incoming;
+    if (cf_tmrb_is_list_array($existing) || cf_tmrb_is_list_array($incoming)) return $incoming;
+    foreach ($incoming as $k => $v) {
+      if (array_key_exists($k, $existing)) $existing[$k] = cf_tmrb_merge_meta_value($existing[$k], $v);
+      else $existing[$k] = $v;
+    }
+    return $existing;
+  }
 }
 
 /** ---------- Legacy options for terms ---------- **/
@@ -685,14 +700,17 @@ add_action('rest_api_init', function () {
 
         /* Case 1: plain key present in term meta */
         if (array_key_exists($normKey, $existing)) {
+          $nextValue = (is_array($existing[$normKey]) && is_array($san))
+            ? cf_tmrb_merge_meta_value($existing[$normKey], $san)
+            : $san;
           if (function_exists('get_field_object')) {
             $fo = get_field_object($normKey, "{$taxonomy}_{$term_id}");
-            if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $san, "{$taxonomy}_{$term_id}"); }
-            else { update_term_meta($term_id, $normKey, $san); }
+            if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $nextValue, "{$taxonomy}_{$term_id}"); }
+            else { update_term_meta($term_id, $normKey, $nextValue); }
           } else {
-            update_term_meta($term_id, $normKey, $san);
+            update_term_meta($term_id, $normKey, $nextValue);
           }
-          $existing[$normKey] = $san;
+          $existing[$normKey] = $nextValue;
           continue;
         }
 
@@ -979,15 +997,18 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
 
       // Plain key present -> update in place
       if (array_key_exists($normKey, $existing)) {
+        $nextValue = (is_array($existing[$normKey]) && is_array($san))
+          ? cf_tmrb_merge_meta_value($existing[$normKey], $san)
+          : $san;
         if (function_exists('get_field_object')) {
           $fo = get_field_object($normKey, $post_id);
-          if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $san, $post_id); }
-          else { update_post_meta($post_id, $normKey, $san); }
+          if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $nextValue, $post_id); }
+          else { update_post_meta($post_id, $normKey, $nextValue); }
         } else {
-          update_post_meta($post_id, $normKey, $san);
+          update_post_meta($post_id, $normKey, $nextValue);
         }
-        cf_tmrb_apply_genesis_fallback($post_id, $normKey, $san);
-        $existing[$normKey] = $san;
+        cf_tmrb_apply_genesis_fallback($post_id, $normKey, $nextValue);
+        $existing[$normKey] = $nextValue;
         continue;
       }
 
