@@ -4,7 +4,7 @@ Tags: seo, automation, content, rest-api, page builder
 Requires at least: 6.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 2.3.6
+Stable tag: 2.3.8
 License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -41,16 +41,19 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 1. NOVA Settings screen with module toggles.
 
 == Changelog ==
+= 2.3.8 =
+* Re-releases the Gutenberg bridge improvements from 2.3.6 with corrected GitHub tag metadata and release packaging.
+* Fixes WordPress update detection so the latest release resolves as 2.3.8 instead of the stale 2.3.6 tag data.
+
 = 2.3.6 =
-NOVA Gutenberg Bridge
-Improve Gutenberg bridge merge logic, permissions, and dedup
-*Relax GET permissions to read-only for API consumers and GPT actions
-*Add author field support on create/update endpoints
-*Strip source images, media-only containers, and custom widget blocks during merge
-*Handle cover/hero blocks: replace headings with page title, strip source text
-*Improve dedup: global paragraph dedup and better heading-section collapse
-*Rebuild innerContent null-slot mapping when blocks are removed
-*Add debug logging to merge flow
+* NOVA Gutenberg Bridge: improved merge logic, permissions, and dedup.
+* Relax GET permissions to read-only for API consumers and GPT actions.
+* Add author field support on create/update endpoints.
+* Strip source images, media-only containers, and custom widget blocks during merge.
+* Handle cover/hero blocks by replacing headings with the page title and stripping source text.
+* Improve dedup with global paragraph dedup and better heading-section collapse.
+* Rebuild innerContent null-slot mapping when blocks are removed.
+* Add debug logging to the merge flow.
 
 = 2.3.5 =
 * Added Polylang bridge module with translation endpoints for creating and linking translated posts/pages.
@@ -85,6 +88,9 @@ Improve Gutenberg bridge merge logic, permissions, and dedup
 * Initial release.
 
 == Upgrade Notice ==
+= 2.3.8 =
+* Replaces the stale 2.3.7 tag metadata with a fresh stable release.
+
 = 2.3.5 =
 * Adds Polylang translation bridge support and settings UI improvements.
 
