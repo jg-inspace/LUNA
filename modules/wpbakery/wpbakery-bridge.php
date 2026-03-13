@@ -1,9 +1,6 @@
 <?php
 /**
- * Plugin Name: NOVA WPBakery Bridge
- * Description: Minimal REST bridge for WPBakery Page Builder (list pages, get outline, apply text_updates).
- * Version:     1.0.0
- * Author:      Hypernova Technologies
+ * NOVA WPBakery Bridge
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -19,3 +16,4 @@ require_once NOVA_WPB_PLUGIN_DIR . 'includes/layout.php';
 require_once NOVA_WPB_PLUGIN_DIR . 'includes/transformations.php';
 require_once NOVA_WPB_PLUGIN_DIR . 'includes/pages.php';
 require_once NOVA_WPB_PLUGIN_DIR . 'includes/rest-api.php';
+
