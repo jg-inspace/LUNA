@@ -3,7 +3,7 @@
  * Plugin Name: NOVA Bridge Suite
  * Description: Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
  * Version: 2.3.6
- * Author: Hypernova Technologies
+ * Author: LUNA B.V.
  * Requires PHP: 7.4
  * License: Proprietary
  * Text Domain: nova-bridge-suite
