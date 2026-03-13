@@ -1,6 +1,6 @@
 <?php
 /**
- * NOVA WPBakery Bridge
+ * NOVA Bridge Suite module: WPBakery Bridge.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,4 +16,5 @@ require_once NOVA_WPB_PLUGIN_DIR . 'includes/layout.php';
 require_once NOVA_WPB_PLUGIN_DIR . 'includes/transformations.php';
 require_once NOVA_WPB_PLUGIN_DIR . 'includes/pages.php';
 require_once NOVA_WPB_PLUGIN_DIR . 'includes/rest-api.php';
+
 
