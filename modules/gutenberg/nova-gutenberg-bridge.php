@@ -1,9 +1,6 @@
 <?php
 /**
  * NOVA Bridge Suite module: Gutenberg bridge.
- *
- * REST bridge for Gutenberg posts & pages — create, update,
- * HTML-to-block conversion, SEO meta, featured images.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
