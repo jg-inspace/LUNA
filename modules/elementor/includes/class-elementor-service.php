@@ -521,9 +521,9 @@ class Elementor_Service {
 			);
 		}
 
-		$unslashed = wp_unslash( $raw );
+		$raw_json = trim( $raw );
 
-		if ( '' === trim( $unslashed ) ) {
+		if ( '' === $raw_json ) {
 			return new WP_Error(
 				'seor_eb_invalid_elementor_meta',
 				__( 'Stored Elementor document is empty.', 'nova-bridge-suite' ),
@@ -531,17 +531,17 @@ class Elementor_Service {
 			);
 		}
 
-		$maybe_unserialized = maybe_unserialize( $unslashed );
+		$maybe_unserialized = maybe_unserialize( $raw_json );
 
 		if ( is_array( $maybe_unserialized ) ) {
 			$this->last_document_source = 'meta:serialized';
 			return $maybe_unserialized;
 		}
 
-		$decoded = json_decode( $unslashed, true );
+		$decoded = $this->decode_json_array_string( $raw_json, $used_unslashed_fallback );
 
-		if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
-			$this->last_document_source = 'meta:json';
+		if ( is_array( $decoded ) ) {
+			$this->last_document_source = $used_unslashed_fallback ? 'meta:json-unslashed' : 'meta:json';
 			return $decoded;
 		}
 
@@ -578,9 +578,9 @@ class Elementor_Service {
 		}
 
 		if ( is_string( $value ) ) {
-			$decoded = json_decode( wp_unslash( $value ), true );
+			$decoded = $this->decode_json_array_string( trim( $value ) );
 
-			if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $decoded ) ) {
+			if ( ! is_array( $decoded ) ) {
 				return new WP_Error(
 					'seor_eb_invalid_page_settings',
 					__( 'elementor_page_settings must be a JSON object/array or a native array.', 'nova-bridge-suite' ),
@@ -656,7 +656,7 @@ class Elementor_Service {
 		$raw_json = null;
 
 		if ( is_string( $data ) ) {
-			$raw_json = trim( wp_unslash( $data ) );
+			$raw_json = trim( $data );
 
 			if ( '' === $raw_json ) {
 				return new WP_Error(
@@ -665,9 +665,9 @@ class Elementor_Service {
 				);
 			}
 
-			$data = json_decode( $raw_json, true );
+			$data = $this->decode_json_array_string( $raw_json );
 
-			if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $data ) ) {
+			if ( ! is_array( $data ) ) {
 				return new WP_Error(
 					'seor_eb_invalid_elementor_data',
 					__( 'elementor_data must be valid JSON or an array.', 'nova-bridge-suite' ),
@@ -708,6 +708,38 @@ class Elementor_Service {
 			'document' => $document,
 			'raw_json' => $raw_json,
 		);
+	}
+
+	/**
+	 * Decode a JSON string using the raw value first, then an unslashed fallback for legacy payloads.
+	 *
+	 * @param string    $raw                    Raw JSON string.
+	 * @param bool|null $used_unslashed_fallback Whether unslashed fallback was required.
+	 * @return array|null
+	 */
+	private function decode_json_array_string( $raw, &$used_unslashed_fallback = null ) {
+		$used_unslashed_fallback = false;
+
+		$decoded = json_decode( $raw, true );
+
+		if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
+			return $decoded;
+		}
+
+		$unslashed = wp_unslash( $raw );
+
+		if ( $unslashed === $raw ) {
+			return null;
+		}
+
+		$decoded = json_decode( $unslashed, true );
+
+		if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
+			$used_unslashed_fallback = true;
+			return $decoded;
+		}
+
+		return null;
 	}
 
 	/**

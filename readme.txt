@@ -43,6 +43,7 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 == Changelog ==
 = 2.3.8 =
 * Improve Elementor full-document persistence so verified `_elementor_data` replacements are applied live instead of silently falling back to stale content.
+* Correct Elementor JSON decoding to read stored and incoming document payloads raw-first, with unslashed fallback only for legacy escaped inputs.
 * Return hard failures for invalid `elementor_data` payloads and persisted document mismatches instead of reporting a false success.
 * Support `elementor_page_settings` during document saves and keep Elementor runtime meta aligned after persistence.
 * Strengthen Elementor cache invalidation and post-cache refresh during publish-side document updates.
