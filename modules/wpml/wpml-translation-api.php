@@ -1,14 +1,16 @@
 <?php
-// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals
 /**
- * NOVA Bridge Suite module: WPML translation bridge.
+ * Plugin Name: NOVA WPML Bridge
+ * Description: Exposes REST endpoints for pushing translations into WPML.
+ * Version: 1.1.14
+ * Author: Hypernova Technologies
  */
 
 if (! defined('ABSPATH')) {
     exit;
 }
 
-define('WTAI_VERSION', '1.0.0');
+define('WTAI_VERSION', '1.1.14');
 define('WTAI_PLUGIN_FILE', __FILE__);
 define('WTAI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 

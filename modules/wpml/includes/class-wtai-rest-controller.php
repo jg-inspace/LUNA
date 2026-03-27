@@ -1,5 +1,4 @@
 <?php
-// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals
 
 if (! defined('ABSPATH')) {
     exit;
@@ -86,42 +85,29 @@ class WTAI_REST_Controller extends \WP_REST_Controller
                 ],
             ]
         );
+
+        register_rest_route(
+            $this->namespace,
+            '/terms/(?P<id>\\d+)/diagnostics',
+            [
+                [
+                    'methods'             => \WP_REST_Server::READABLE,
+                    'callback'            => [$this, 'get_term_diagnostics'],
+                    'permission_callback' => [$this, 'permissions_check'],
+                    'args'                => [
+                        'taxonomy' => [
+                            'description' => 'Taxonomy of the source term (e.g. product_cat).',
+                            'type'        => 'string',
+                            'required'    => true,
+                        ],
+                    ],
+                ],
+            ]
+        );
     }
 
     public function permissions_check($request): bool
     {
-        if (! $request instanceof \WP_REST_Request) {
-            return current_user_can('edit_posts');
-        }
-
-        $route = (string) $request->get_route();
-
-        if (false !== strpos($route, '/terms')) {
-            $taxonomy = $request->get_param('taxonomy');
-            $term_id  = (int) ($request->get_param('source_term_id') ?: $request->get_param('id'));
-
-            if (empty($taxonomy) || ! is_string($taxonomy)) {
-                return false;
-            }
-
-            if ($term_id > 0) {
-                return current_user_can('edit_term', $term_id);
-            }
-
-            $taxonomy_obj = get_taxonomy($taxonomy);
-            $capability   = $taxonomy_obj && ! empty($taxonomy_obj->cap->edit_terms)
-                ? $taxonomy_obj->cap->edit_terms
-                : 'edit_terms';
-
-            return current_user_can($capability);
-        }
-
-        $post_id = (int) ($request->get_param('source_post_id') ?: $request->get_param('id'));
-
-        if ($post_id > 0) {
-            return current_user_can('edit_post', $post_id);
-        }
-
         return current_user_can('edit_posts');
     }
 
@@ -265,6 +251,28 @@ class WTAI_REST_Controller extends \WP_REST_Controller
         return new \WP_REST_Response($result, 200);
     }
 
+    public function get_term_diagnostics(\WP_REST_Request $request)
+    {
+        $source_term_id = (int) $request->get_param('id');
+        $taxonomy       = $request->get_param('taxonomy');
+
+        if ($source_term_id <= 0) {
+            return new \WP_Error('wtai_missing_source_term', 'source_term_id is required.', ['status' => 400]);
+        }
+
+        if (empty($taxonomy) || ! is_string($taxonomy)) {
+            return new \WP_Error('wtai_missing_taxonomy', 'taxonomy is required.', ['status' => 400]);
+        }
+
+        $result = $this->translation_service->get_term_diagnostics($source_term_id, $taxonomy);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new \WP_REST_Response($result, 200);
+    }
+
     public function get_post_translations(\WP_REST_Request $request)
     {
         $source_post_id = (int) $request->get_param('id');
@@ -386,7 +394,7 @@ class WTAI_REST_Controller extends \WP_REST_Controller
                     'type'       => 'object',
                     'properties' => [
                         'language'    => [
-                            'description' => 'Language code (e.g. fr, de).',
+                            'description' => 'WPML language code (e.g. en, de). Locale values like en_EN are normalized when possible.',
                             'type'        => 'string',
                         ],
                         'name'        => [
