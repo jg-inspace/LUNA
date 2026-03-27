@@ -57,6 +57,10 @@ class Elementor_Service {
 		$include_document    = isset( $args['include_document'] ) ? (bool) $args['include_document'] : false;
 		$data                = $this->get_elementor_document_data( $post_id );
 
+		if ( is_wp_error( $data ) ) {
+			return $data;
+		}
+
 		$payload = array(
 			'id'       => (int) $post_id,
 			'title'    => $post->post_title,
@@ -132,20 +136,55 @@ class Elementor_Service {
 			update_post_meta( $post_id, '_wp_page_template', sanitize_text_field( $payload['template'] ) );
 		}
 
-		$document_data = $this->resolve_document_data( $payload );
-
-		$fields_payload = isset( $payload['fields'] ) && is_array( $payload['fields'] ) ? $payload['fields'] : array();
-		$elementor_data = $this->apply_field_mutations( $document_data, $fields_payload );
-
-		if ( is_wp_error( $elementor_data ) ) {
-			return $elementor_data;
+		$page_settings = $this->resolve_page_settings_payload( $payload );
+		if ( is_wp_error( $page_settings ) ) {
+			return $page_settings;
 		}
 
-		$append_html = isset( $payload['append_html'] ) ? (string) $payload['append_html'] : '';
-		$append_faqs = isset( $payload['append_faqs'] ) && is_array( $payload['append_faqs'] ) ? $payload['append_faqs'] : array();
-		$elementor_data = $this->append_html_block( $elementor_data, $append_html, $append_faqs );
+		$full_document = $this->maybe_prepare_direct_document_replacement( $payload );
+		if ( is_wp_error( $full_document ) ) {
+			return $full_document;
+		}
 
-		$this->persist_elementor_document( $post_id, $elementor_data );
+		if ( false !== $full_document ) {
+			$persist = $this->persist_elementor_document(
+				$post_id,
+				$full_document['document'],
+				array(
+					'raw_json'      => $full_document['raw_json'],
+					'page_settings' => $page_settings,
+				)
+			);
+		} else {
+			$document_data = $this->resolve_document_data( $payload );
+
+			if ( is_wp_error( $document_data ) ) {
+				return $document_data;
+			}
+
+			$fields_payload = isset( $payload['fields'] ) && is_array( $payload['fields'] ) ? $payload['fields'] : array();
+			$elementor_data = $this->apply_field_mutations( $document_data, $fields_payload );
+
+			if ( is_wp_error( $elementor_data ) ) {
+				return $elementor_data;
+			}
+
+			$append_html   = isset( $payload['append_html'] ) ? (string) $payload['append_html'] : '';
+			$append_faqs   = isset( $payload['append_faqs'] ) && is_array( $payload['append_faqs'] ) ? $payload['append_faqs'] : array();
+			$elementor_data = $this->append_html_block( $elementor_data, $append_html, $append_faqs );
+
+			$persist = $this->persist_elementor_document(
+				$post_id,
+				$elementor_data,
+				array(
+					'page_settings' => $page_settings,
+				)
+			);
+		}
+
+		if ( is_wp_error( $persist ) ) {
+			return $persist;
+		}
 
 		if ( ! empty( $payload['meta'] ) && is_array( $payload['meta'] ) ) {
 			$this->persist_meta( $post_id, $payload['meta'] );
@@ -222,20 +261,59 @@ class Elementor_Service {
 			$this->persist_meta( $post_id, $payload['meta'] );
 		}
 
-		$current_data  = $this->get_elementor_document_data( $post_id );
-		$document_data = $this->resolve_document_data( $payload, $current_data, true );
-		$fields        = isset( $payload['fields'] ) && is_array( $payload['fields'] ) ? $payload['fields'] : array();
-		$mutated       = $this->apply_field_mutations( $document_data, $fields );
-
-		if ( is_wp_error( $mutated ) ) {
-			return $mutated;
+		$page_settings = $this->resolve_page_settings_payload( $payload );
+		if ( is_wp_error( $page_settings ) ) {
+			return $page_settings;
 		}
 
-		$append_html = isset( $payload['append_html'] ) ? (string) $payload['append_html'] : '';
-		$append_faqs = isset( $payload['append_faqs'] ) && is_array( $payload['append_faqs'] ) ? $payload['append_faqs'] : array();
-		$mutated     = $this->append_html_block( $mutated, $append_html, $append_faqs );
+		$full_document = $this->maybe_prepare_direct_document_replacement( $payload );
+		if ( is_wp_error( $full_document ) ) {
+			return $full_document;
+		}
 
-		$this->persist_elementor_document( $post_id, $mutated );
+		if ( false !== $full_document ) {
+			$persist = $this->persist_elementor_document(
+				$post_id,
+				$full_document['document'],
+				array(
+					'raw_json'      => $full_document['raw_json'],
+					'page_settings' => $page_settings,
+				)
+			);
+		} else {
+			$current_data = $this->get_elementor_document_data( $post_id );
+			if ( is_wp_error( $current_data ) ) {
+				return $current_data;
+			}
+
+			$document_data = $this->resolve_document_data( $payload, $current_data, true );
+			if ( is_wp_error( $document_data ) ) {
+				return $document_data;
+			}
+
+			$fields  = isset( $payload['fields'] ) && is_array( $payload['fields'] ) ? $payload['fields'] : array();
+			$mutated = $this->apply_field_mutations( $document_data, $fields );
+
+			if ( is_wp_error( $mutated ) ) {
+				return $mutated;
+			}
+
+			$append_html = isset( $payload['append_html'] ) ? (string) $payload['append_html'] : '';
+			$append_faqs = isset( $payload['append_faqs'] ) && is_array( $payload['append_faqs'] ) ? $payload['append_faqs'] : array();
+			$mutated     = $this->append_html_block( $mutated, $append_html, $append_faqs );
+
+			$persist = $this->persist_elementor_document(
+				$post_id,
+				$mutated,
+				array(
+					'page_settings' => $page_settings,
+				)
+			);
+		}
+
+		if ( is_wp_error( $persist ) ) {
+			return $persist;
+		}
 
 		$finalize = $this->finalize_elementor_document( $post_id, $payload );
 		if ( is_wp_error( $finalize ) ) {
@@ -332,36 +410,18 @@ class Elementor_Service {
 	 * Decode Elementor `_elementor_data`.
 	 *
 	 * @param int $post_id Target page.
-	 * @return array
+	 * @return array|WP_Error
 	 */
 	public function get_elementor_document_data( $post_id ) {
 		$this->last_document_source = 'none';
 
-		$raw = get_post_meta( $post_id, '_elementor_data', true );
-		$document = array();
+		$document = $this->get_document_data_from_meta( $post_id );
 
-		if ( empty( $raw ) ) {
-			$document = $this->get_document_data_via_elementor( $post_id );
-		} elseif ( is_array( $raw ) ) {
-			$this->last_document_source = 'meta:array';
-			$document = $raw;
-		} elseif ( is_string( $raw ) ) {
-			$maybe_unserialized = maybe_unserialize( wp_unslash( $raw ) );
-
-			if ( is_array( $maybe_unserialized ) ) {
-				$this->last_document_source = 'meta:serialized';
-				$document = $maybe_unserialized;
-			} else {
-				$decoded = json_decode( wp_unslash( $raw ), true );
-
-				if ( is_array( $decoded ) ) {
-					$this->last_document_source = 'meta:json';
-					$document = $decoded;
-				}
-			}
+		if ( is_wp_error( $document ) ) {
+			return $document;
 		}
 
-		if ( empty( $document ) ) {
+		if ( null === $document ) {
 			$document = $this->get_document_data_via_elementor( $post_id );
 		}
 
@@ -373,20 +433,38 @@ class Elementor_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $document Document data.
+	 * @param array $options  Persistence options.
+	 * @return true|WP_Error
 	 */
-	private function persist_elementor_document( $post_id, array $document ) {
-		if ( empty( $document ) ) {
-			update_post_meta( $post_id, '_elementor_data', '[]' );
-		} else {
-			update_post_meta( $post_id, '_elementor_data', wp_slash( wp_json_encode( $document ) ) );
+	private function persist_elementor_document( $post_id, array $document, array $options = array() ) {
+		$raw_json = isset( $options['raw_json'] ) ? $options['raw_json'] : null;
+
+		if ( ! is_string( $raw_json ) || '' === trim( $raw_json ) ) {
+			$raw_json = $this->encode_json_string(
+				$document,
+				'seor_eb_encode_failed',
+				__( 'Elementor document could not be encoded for persistence.', 'nova-bridge-suite' )
+			);
+			if ( is_wp_error( $raw_json ) ) {
+				return $raw_json;
+			}
 		}
 
-		update_post_meta( $post_id, '_elementor_edit_mode', 'builder' );
-		update_post_meta( $post_id, '_elementor_template_type', 'page' );
+		update_post_meta( $post_id, '_elementor_data', wp_slash( $raw_json ) );
 
-		if ( defined( 'ELEMENTOR_VERSION' ) ) {
-			update_post_meta( $post_id, '_elementor_version', ELEMENTOR_VERSION );
+		$page_settings = isset( $options['page_settings'] ) && is_array( $options['page_settings'] )
+			? $options['page_settings']
+			: array( 'present' => false );
+
+		$page_settings_result = $this->persist_elementor_page_settings( $post_id, $page_settings );
+		if ( is_wp_error( $page_settings_result ) ) {
+			return $page_settings_result;
 		}
+
+		$this->sync_elementor_runtime_meta( $post_id );
+		clean_post_cache( $post_id );
+
+		return $this->verify_persisted_elementor_document( $post_id, $document, $page_settings );
 	}
 
 	/**
@@ -410,6 +488,407 @@ class Elementor_Service {
 
 			update_post_meta( $post_id, $key, $value );
 		}
+	}
+
+	/**
+	 * Read Elementor document data directly from post meta without fallback.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return array|WP_Error|null
+	 */
+	private function get_document_data_from_meta( $post_id ) {
+		$has_meta = metadata_exists( 'post', $post_id, '_elementor_data' );
+
+		if ( ! $has_meta ) {
+			return null;
+		}
+
+		$raw = get_post_meta( $post_id, '_elementor_data', true );
+
+		if ( is_array( $raw ) ) {
+			$this->last_document_source = 'meta:array';
+			return $raw;
+		}
+
+		if ( ! is_string( $raw ) ) {
+			return new WP_Error(
+				'seor_eb_invalid_elementor_meta',
+				__( 'Stored Elementor document is unreadable.', 'nova-bridge-suite' ),
+				array(
+					'post_id'  => (int) $post_id,
+					'raw_type' => gettype( $raw ),
+				)
+			);
+		}
+
+		$unslashed = wp_unslash( $raw );
+
+		if ( '' === trim( $unslashed ) ) {
+			return new WP_Error(
+				'seor_eb_invalid_elementor_meta',
+				__( 'Stored Elementor document is empty.', 'nova-bridge-suite' ),
+				array( 'post_id' => (int) $post_id )
+			);
+		}
+
+		$maybe_unserialized = maybe_unserialize( $unslashed );
+
+		if ( is_array( $maybe_unserialized ) ) {
+			$this->last_document_source = 'meta:serialized';
+			return $maybe_unserialized;
+		}
+
+		$decoded = json_decode( $unslashed, true );
+
+		if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
+			$this->last_document_source = 'meta:json';
+			return $decoded;
+		}
+
+		return new WP_Error(
+			'seor_eb_invalid_elementor_meta',
+			__( 'Stored Elementor document is unreadable.', 'nova-bridge-suite' ),
+			array(
+				'post_id'    => (int) $post_id,
+				'json_error' => function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : '',
+			)
+		);
+	}
+
+	/**
+	 * Resolve top-level Elementor page settings payload.
+	 *
+	 * @param array $payload Request payload.
+	 * @return array|WP_Error
+	 */
+	private function resolve_page_settings_payload( array $payload ) {
+		if ( ! array_key_exists( 'elementor_page_settings', $payload ) ) {
+			return array(
+				'present' => false,
+			);
+		}
+
+		$value = $payload['elementor_page_settings'];
+
+		if ( null === $value ) {
+			return array(
+				'present' => true,
+				'value'   => null,
+			);
+		}
+
+		if ( is_string( $value ) ) {
+			$decoded = json_decode( wp_unslash( $value ), true );
+
+			if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $decoded ) ) {
+				return new WP_Error(
+					'seor_eb_invalid_page_settings',
+					__( 'elementor_page_settings must be a JSON object/array or a native array.', 'nova-bridge-suite' ),
+					array(
+						'json_error' => function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : '',
+					)
+				);
+			}
+
+			$value = $decoded;
+		}
+
+		if ( ! is_array( $value ) ) {
+			return new WP_Error(
+				'seor_eb_invalid_page_settings',
+				__( 'elementor_page_settings must be a JSON object/array or a native array.', 'nova-bridge-suite' )
+			);
+		}
+
+		return array(
+			'present' => true,
+			'value'   => $value,
+		);
+	}
+
+	/**
+	 * Determine whether the payload requires document mutation before save.
+	 *
+	 * @param array $payload Request payload.
+	 * @return bool
+	 */
+	private function payload_requires_document_mutation( array $payload ) {
+		$fields = isset( $payload['fields'] ) && is_array( $payload['fields'] ) ? $payload['fields'] : array();
+		if ( ! empty( $fields ) ) {
+			return true;
+		}
+
+		$append_html = isset( $payload['append_html'] ) ? trim( (string) $payload['append_html'] ) : '';
+		if ( '' !== $append_html ) {
+			return true;
+		}
+
+		$append_faqs = isset( $payload['append_faqs'] ) && is_array( $payload['append_faqs'] ) ? $payload['append_faqs'] : array();
+
+		return ! empty( $this->normalize_faq_items( $append_faqs ) );
+	}
+
+	/**
+	 * Prepare a direct full-document replacement when no mutations are requested.
+	 *
+	 * @param array $payload Request payload.
+	 * @return array|WP_Error|false
+	 */
+	private function maybe_prepare_direct_document_replacement( array $payload ) {
+		if ( ! array_key_exists( 'elementor_data', $payload ) ) {
+			return false;
+		}
+
+		if ( $this->payload_requires_document_mutation( $payload ) ) {
+			return false;
+		}
+
+		return $this->prepare_document_payload( $payload['elementor_data'] );
+	}
+
+	/**
+	 * Prepare Elementor document payload for persistence.
+	 *
+	 * @param mixed $data Incoming document payload.
+	 * @return array|WP_Error
+	 */
+	private function prepare_document_payload( $data ) {
+		$raw_json = null;
+
+		if ( is_string( $data ) ) {
+			$raw_json = trim( wp_unslash( $data ) );
+
+			if ( '' === $raw_json ) {
+				return new WP_Error(
+					'seor_eb_invalid_elementor_data',
+					__( 'elementor_data cannot be an empty string.', 'nova-bridge-suite' )
+				);
+			}
+
+			$data = json_decode( $raw_json, true );
+
+			if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $data ) ) {
+				return new WP_Error(
+					'seor_eb_invalid_elementor_data',
+					__( 'elementor_data must be valid JSON or an array.', 'nova-bridge-suite' ),
+					array(
+						'json_error' => function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : '',
+					)
+				);
+			}
+		} elseif ( ! is_array( $data ) ) {
+			return new WP_Error(
+				'seor_eb_invalid_elementor_data',
+				__( 'elementor_data must be valid JSON or an array.', 'nova-bridge-suite' )
+			);
+		}
+
+		$document = $this->normalize_document_structure( $data );
+
+		if ( ! $this->is_valid_document_payload( $data, $document ) ) {
+			return new WP_Error(
+				'seor_eb_invalid_elementor_data',
+				__( 'elementor_data does not contain a valid Elementor document.', 'nova-bridge-suite' )
+			);
+		}
+
+		if ( null === $raw_json || $data !== $document ) {
+			$raw_json = $this->encode_json_string(
+				$document,
+				'seor_eb_encode_failed',
+				__( 'Elementor document could not be encoded for persistence.', 'nova-bridge-suite' )
+			);
+
+			if ( is_wp_error( $raw_json ) ) {
+				return $raw_json;
+			}
+		}
+
+		return array(
+			'document' => $document,
+			'raw_json' => $raw_json,
+		);
+	}
+
+	/**
+	 * Determine if the provided payload can represent an Elementor document.
+	 *
+	 * @param array $raw_document Raw input document.
+	 * @param array $document     Normalized Elementor document.
+	 * @return bool
+	 */
+	private function is_valid_document_payload( array $raw_document, array $document ) {
+		if ( empty( $raw_document ) ) {
+			return true;
+		}
+
+		if ( isset( $raw_document[0] ) && is_array( $raw_document[0] ) ) {
+			return true;
+		}
+
+		foreach ( array( 'elements', 'content', 'data', 'widgets' ) as $key ) {
+			if ( array_key_exists( $key, $raw_document ) && is_array( $raw_document[ $key ] ) ) {
+				return true;
+			}
+		}
+
+		foreach ( $raw_document as $maybe_element ) {
+			if ( is_array( $maybe_element ) && isset( $maybe_element['elType'] ) ) {
+				return true;
+			}
+		}
+
+		return ! empty( $document );
+	}
+
+	/**
+	 * Encode data with strict error handling.
+	 *
+	 * @param mixed  $value         Value to encode.
+	 * @param string $error_code    Error code.
+	 * @param string $error_message Error message.
+	 * @return string|WP_Error
+	 */
+	private function encode_json_string( $value, $error_code, $error_message ) {
+		$json = wp_json_encode( $value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+
+		if ( false === $json ) {
+			return new WP_Error(
+				$error_code,
+				$error_message,
+				array(
+					'json_error' => function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : '',
+				)
+			);
+		}
+
+		return $json;
+	}
+
+	/**
+	 * Persist Elementor page settings when explicitly supplied.
+	 *
+	 * @param int   $post_id        Post ID.
+	 * @param array $page_settings  Page settings payload state.
+	 * @return true|WP_Error
+	 */
+	private function persist_elementor_page_settings( $post_id, array $page_settings ) {
+		if ( empty( $page_settings['present'] ) ) {
+			return true;
+		}
+
+		if ( ! array_key_exists( 'value', $page_settings ) || null === $page_settings['value'] ) {
+			delete_post_meta( $post_id, '_elementor_page_settings' );
+			return true;
+		}
+
+		if ( ! is_array( $page_settings['value'] ) ) {
+			return new WP_Error(
+				'seor_eb_invalid_page_settings',
+				__( 'Elementor page settings must be an array when persisted.', 'nova-bridge-suite' )
+			);
+		}
+
+		update_post_meta( $post_id, '_elementor_page_settings', $page_settings['value'] );
+
+		return true;
+	}
+
+	/**
+	 * Keep Elementor runtime meta aligned after saving document data.
+	 *
+	 * @param int $post_id Post ID.
+	 */
+	private function sync_elementor_runtime_meta( $post_id ) {
+		update_post_meta( $post_id, '_elementor_edit_mode', 'builder' );
+		update_post_meta( $post_id, '_elementor_template_type', 'page' );
+
+		if ( defined( 'ELEMENTOR_VERSION' ) ) {
+			update_post_meta( $post_id, '_elementor_version', ELEMENTOR_VERSION );
+		}
+	}
+
+	/**
+	 * Verify persisted Elementor data immediately after write.
+	 *
+	 * @param int   $post_id        Post ID.
+	 * @param array $expected       Expected document data.
+	 * @param array $page_settings  Page settings payload state.
+	 * @return true|WP_Error
+	 */
+	private function verify_persisted_elementor_document( $post_id, array $expected, array $page_settings = array() ) {
+		$stored = $this->get_document_data_from_meta( $post_id );
+
+		if ( is_wp_error( $stored ) ) {
+			return new WP_Error(
+				'seor_eb_persist_mismatch',
+				__( 'Persisted Elementor document could not be reloaded after save.', 'nova-bridge-suite' ),
+				array(
+					'post_id' => (int) $post_id,
+					'error'   => $stored->get_error_code(),
+				)
+			);
+		}
+
+		if ( null === $stored || ! $this->documents_match( $expected, $stored ) ) {
+			return new WP_Error(
+				'seor_eb_persist_mismatch',
+				__( 'Persisted Elementor document does not match the requested payload.', 'nova-bridge-suite' ),
+				array( 'post_id' => (int) $post_id )
+			);
+		}
+
+		if ( ! empty( $page_settings['present'] ) ) {
+			$has_stored_page_settings = metadata_exists( 'post', $post_id, '_elementor_page_settings' );
+
+			if ( ! array_key_exists( 'value', $page_settings ) || null === $page_settings['value'] ) {
+				if ( $has_stored_page_settings ) {
+					return new WP_Error(
+						'seor_eb_persist_mismatch',
+						__( 'Elementor page settings were not removed as requested.', 'nova-bridge-suite' ),
+						array( 'post_id' => (int) $post_id )
+					);
+				}
+			} else {
+				$stored_page_settings = get_post_meta( $post_id, '_elementor_page_settings', true );
+
+				if ( $stored_page_settings !== $page_settings['value'] ) {
+					return new WP_Error(
+						'seor_eb_persist_mismatch',
+						__( 'Elementor page settings do not match the requested payload.', 'nova-bridge-suite' ),
+						array( 'post_id' => (int) $post_id )
+					);
+				}
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Compare two Elementor documents after normalization.
+	 *
+	 * @param array $expected Expected document.
+	 * @param array $actual   Actual document.
+	 * @return bool
+	 */
+	private function documents_match( array $expected, array $actual ) {
+		$expected_json = $this->encode_json_string(
+			$this->normalize_document_structure( $expected ),
+			'seor_eb_encode_failed',
+			__( 'Elementor document comparison failed.', 'nova-bridge-suite' )
+		);
+		$actual_json   = $this->encode_json_string(
+			$this->normalize_document_structure( $actual ),
+			'seor_eb_encode_failed',
+			__( 'Elementor document comparison failed.', 'nova-bridge-suite' )
+		);
+
+		if ( is_wp_error( $expected_json ) || is_wp_error( $actual_json ) ) {
+			return false;
+		}
+
+		return hash_equals( $expected_json, $actual_json );
 	}
 
 	/**
@@ -696,26 +1175,27 @@ class Elementor_Service {
 	 * @param array $payload Payload data.
 	 * @param array $fallback Existing document as fallback.
 	 * @param bool  $allow_source Whether to allow cloning from source page.
-	 * @return array
+	 * @return array|WP_Error
 	 */
 	private function resolve_document_data( array $payload, array $fallback = array(), $allow_source = true ) {
 		if ( array_key_exists( 'elementor_data', $payload ) ) {
-			$data = $payload['elementor_data'];
+			$prepared = $this->prepare_document_payload( $payload['elementor_data'] );
 
-			if ( is_string( $data ) ) {
-				$decoded = json_decode( wp_unslash( $data ), true );
-				if ( is_array( $decoded ) ) {
-					return $decoded;
-				}
-			} elseif ( is_array( $data ) ) {
-				return $data;
+			if ( is_wp_error( $prepared ) ) {
+				return $prepared;
 			}
+
+			return $prepared['document'];
 		}
 
 		if ( $allow_source && ! empty( $payload['source_page_id'] ) ) {
 			$source_id = (int) $payload['source_page_id'];
 			if ( $source_id > 0 ) {
 				$source_data = $this->get_elementor_document_data( $source_id );
+				if ( is_wp_error( $source_data ) ) {
+					return $source_data;
+				}
+
 				if ( ! empty( $source_data ) ) {
 					return $source_data;
 				}
@@ -1017,7 +1497,15 @@ class Elementor_Service {
 			return true;
 		}
 
-		return $this->bump_post_revision( $post_id );
+		$result = $this->bump_post_revision( $post_id );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$this->clear_elementor_cache( $post_id );
+
+		return true;
 	}
 
 	/**
@@ -1042,11 +1530,13 @@ class Elementor_Service {
 	 */
 	private function clear_elementor_cache( $post_id ) {
 		if ( ! class_exists( '\Elementor\Plugin' ) ) {
+			clean_post_cache( $post_id );
 			return;
 		}
 
 		try {
 			$plugin = \Elementor\Plugin::instance();
+			$this->invalidate_elementor_document_cache( $post_id, $plugin );
 
 			if ( isset( $plugin->posts_css_manager ) && method_exists( $plugin->posts_css_manager, 'clear_cache' ) ) {
 				$plugin->posts_css_manager->clear_cache( $post_id );
@@ -1058,6 +1548,8 @@ class Elementor_Service {
 		} catch ( \Throwable $e ) {
 			// Swallow silently; cache refresh failure should not break content updates.
 		}
+
+		clean_post_cache( $post_id );
 	}
 
 	/**
@@ -1077,6 +1569,14 @@ class Elementor_Service {
 			);
 		}
 
+		if ( class_exists( '\Elementor\Plugin' ) ) {
+			try {
+				$this->invalidate_elementor_document_cache( $post_id, \Elementor\Plugin::instance() );
+			} catch ( \Throwable $e ) {
+				// Best-effort only.
+			}
+		}
+
 		$result = wp_update_post(
 			array(
 				'ID'          => $post_id,
@@ -1089,7 +1589,44 @@ class Elementor_Service {
 			return $result;
 		}
 
+		if ( class_exists( '\Elementor\Plugin' ) ) {
+			try {
+				$this->invalidate_elementor_document_cache( $post_id, \Elementor\Plugin::instance() );
+			} catch ( \Throwable $e ) {
+				// Best-effort only.
+			}
+		}
+
+		clean_post_cache( $post_id );
+
 		return true;
+	}
+
+	/**
+	 * Invalidate Elementor document caches when the installed version exposes it.
+	 *
+	 * @param int               $post_id Post ID.
+	 * @param \Elementor\Plugin $plugin  Elementor plugin instance.
+	 */
+	private function invalidate_elementor_document_cache( $post_id, $plugin ) {
+		if ( ! isset( $plugin->documents ) ) {
+			return;
+		}
+
+		$documents_manager = $plugin->documents;
+		$document          = null;
+
+		if ( method_exists( $documents_manager, 'get' ) ) {
+			$document = $documents_manager->get( $post_id );
+		}
+
+		if ( $document && is_object( $document ) ) {
+			foreach ( array( 'delete_cache', 'clear_cache' ) as $method ) {
+				if ( method_exists( $document, $method ) ) {
+					$document->{$method}();
+				}
+			}
+		}
 	}
 
 	/**

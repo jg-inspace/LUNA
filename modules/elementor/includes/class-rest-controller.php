@@ -761,6 +761,9 @@ class Rest_Controller extends WP_REST_Controller {
 			'elementor_data' => array(
 				'description' => __( 'Full Elementor document (array or JSON string).', 'nova-bridge-suite' ),
 			),
+			'elementor_page_settings' => array(
+				'description' => __( 'Optional Elementor page settings payload persisted to _elementor_page_settings.', 'nova-bridge-suite' ),
+			),
 			'append_html'   => array(
 				'type'        => 'string',
 				'description' => __( 'Optional HTML content appended as a new text-editor section at the end of the document.', 'nova-bridge-suite' ),

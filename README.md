@@ -4,7 +4,7 @@
 - Requires at least: 6.0
 - Tested up to: 6.9.1
 - Requires PHP: 7.4
-- Stable tag: 2.3.7
+- Stable tag: 2.3.8
 - License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -46,6 +46,13 @@ No. It works alongside builders like Avada, Elementor, WPBakery, and more. NOVA 
 Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is active you can also enable the optional rich text field module for category pages - in case your category page template still needs this.
 
 ## Changelog
+
+### 2.3.8
+
+- Improve Elementor full-document persistence so verified `_elementor_data` replacements are applied live instead of silently falling back to stale content.
+- Return hard failures for invalid `elementor_data` payloads and persisted document mismatches instead of reporting a false success.
+- Support `elementor_page_settings` during document saves and keep Elementor runtime meta aligned after persistence.
+- Strengthen Elementor cache invalidation and post-cache refresh during publish-side document updates.
 
 ### 2.3.7
 
