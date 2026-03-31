@@ -80,6 +80,7 @@ get_header();
 			$faq_title               = \SEORAI\BodycleanCPT\Plugin::faq_title_text();
 			$related_articles_title  = \SEORAI\BodycleanCPT\Plugin::related_articles_label_text();
 			$author_role_parts       = [];
+			$has_takeaways           = $show_key_takeaways && ! empty( $key_takeaways );
 			$has_toc                 = $show_toc && ! empty( $toc_items );
 			$has_intro               = $show_intro && '' !== trim( wp_strip_all_tags( $intro_html ) );
 			$has_part_one_content    = $show_content_1 && '' !== trim( wp_strip_all_tags( $part_one_html ) );
@@ -88,7 +89,7 @@ get_header();
 					|| $show_read_time
 					|| ( $show_date && '' !== trim( (string) $published_date_readable ) );
 				$has_meta_row            = $has_meta_primary || ! empty( $share_links );
-				$has_pre_cta_flow        = ( $show_key_takeaways && ! empty( $key_takeaways ) ) || $has_toc || $has_part_one_content;
+				$has_pre_cta_flow        = $has_takeaways || $has_toc || $has_part_one_content;
 				$use_legacy_layout       = \SEORAI\BodycleanCPT\Plugin::is_legacy_blog_post( $post_id );
 
 				if ( $use_legacy_layout ) :
@@ -360,15 +361,15 @@ get_header();
 				<?php endif; ?>
 
 				<?php if ( $has_pre_cta_flow ) : ?>
-					<div class="quarantined-cpt__pre-cta-flow quarantined-cpt__component quarantined-cpt__component--content-1<?php echo $has_toc ? ' quarantined-cpt__pre-cta-flow--has-toc' : ''; ?>">
-							<?php if ( $has_toc ) : ?>
-								<section class="quarantined-cpt__panel quarantined-cpt__panel--toc" aria-label="<?php echo esc_attr( $toc_label ); ?>">
-									<h2 class="quarantined-cpt__panel-title"><?php echo esc_html( $toc_label ); ?></h2>
-									<?php echo $toc_primary_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-								</section>
-							<?php endif; ?>
+					<div class="quarantined-cpt__pre-cta-flow quarantined-cpt__component quarantined-cpt__component--content-1<?php echo $has_toc ? ' quarantined-cpt__pre-cta-flow--has-toc' : ''; ?><?php echo ( $has_toc && ! $has_takeaways ) ? ' quarantined-cpt__pre-cta-flow--toc-only' : ''; ?>">
+						<?php if ( $has_toc ) : ?>
+							<section class="quarantined-cpt__panel quarantined-cpt__panel--toc" aria-label="<?php echo esc_attr( $toc_label ); ?>">
+								<h2 class="quarantined-cpt__panel-title"><?php echo esc_html( $toc_label ); ?></h2>
+								<?php echo $toc_primary_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							</section>
+						<?php endif; ?>
 
-						<?php if ( $show_key_takeaways && ! empty( $key_takeaways ) ) : ?>
+						<?php if ( $has_takeaways ) : ?>
 							<section class="quarantined-cpt__panel quarantined-cpt__panel--takeaways" aria-label="<?php echo esc_attr( $key_takeaways_label ); ?>">
 								<h2 class="quarantined-cpt__panel-title"><?php echo esc_html( $key_takeaways_label ); ?></h2>
 								<ul>
@@ -379,13 +380,13 @@ get_header();
 							</section>
 						<?php endif; ?>
 
-							<?php if ( $has_part_one_content ) : ?>
-								<section class="quarantined-cpt__content quarantined-cpt__content--part-one" data-quarantined-keep="true">
-									<?php echo wp_kses_post( $part_one_html ); ?>
-								</section>
-							<?php endif; ?>
-						</div>
-					<?php endif; ?>
+						<?php if ( $has_part_one_content ) : ?>
+							<section class="quarantined-cpt__content quarantined-cpt__content--part-one" data-quarantined-keep="true">
+								<?php echo wp_kses_post( $part_one_html ); ?>
+							</section>
+						<?php endif; ?>
+					</div>
+				<?php endif; ?>
 
 				<?php if ( $show_wide_cta && $cta_is_active ) : ?>
 					<section class="quarantined-cpt__wide-cta quarantined-cpt__component quarantined-cpt__component--wide-cta" data-quarantined-keep="true">

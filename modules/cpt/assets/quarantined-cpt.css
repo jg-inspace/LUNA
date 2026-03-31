@@ -482,6 +482,12 @@ body.admin-bar.quarantined-cpt-author .quarantined-cpt__inner {
 	margin: 0 0 1rem 1.4rem;
 }
 
+.quarantined-cpt__pre-cta-flow--toc-only .quarantined-cpt__panel--toc {
+	float: none;
+	width: 100%;
+	margin: 0 0 1rem;
+}
+
 .quarantined-cpt__pre-cta-flow--has-toc .quarantined-cpt__panel--takeaways {
 	width: calc(100% - min(100%, 320px) - 1.4rem);
 	max-width: 100%;

@@ -4,7 +4,7 @@ Tags: seo, automation, content, rest-api, page builder
 Requires at least: 6.0
 Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 2.3.9
+Stable tag: 2.3.10
 License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -41,6 +41,10 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 1. NOVA Settings screen with module toggles.
 
 == Changelog ==
+= 2.3.10 =
+* Make the Blog CPT table of contents expand to full width when key takeaways are empty instead of leaving the takeaways column blank.
+* Keep the existing two-column TOC and key takeaways layout when both panels are populated.
+
 = 2.3.9 =
 * Fix deprecated `mb_convert_encoding(..., 'HTML-ENTITIES', ...)` handling in the Blog CPT DOM parsing flow for public post renders.
 * Switch blog heading annotation and H1 stripping to numeric-entity encoding so PHP 8.2+ no longer emits deprecation notices.
