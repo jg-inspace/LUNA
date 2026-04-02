@@ -46,6 +46,7 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 * Move existing posts to the renamed Blog CPT slug during settings saves and remap CPT-specific design and layout overrides to the new slug.
 * Use the active CPT label in empty archive messages instead of the old hardcoded fallback copy.
 * Mark the release metadata as tested through WordPress 6.9 so 6.9.4 sites report compatibility correctly.
+* Guard Blog CPT archive CTA sanitization so clearing settings does not emit `Undefined array key "copy"` warnings.
 
 = 2.3.10 =
 * Make the Blog CPT table of contents expand to full width when key takeaways are empty instead of leaving the takeaways column blank.

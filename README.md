@@ -53,6 +53,7 @@ Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is ac
 - Move existing posts to the renamed Blog CPT slug during settings saves and remap CPT-specific design and layout overrides to the new slug.
 - Use the active CPT label in empty archive messages instead of the old hardcoded fallback copy.
 - Mark the release metadata as tested through WordPress 6.9 so 6.9.4 sites report compatibility correctly.
+- Guard Blog CPT archive CTA sanitization so clearing settings does not emit `Undefined array key "copy"` warnings.
 
 ### 2.3.10
 
