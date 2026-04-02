@@ -133,6 +133,21 @@ final class Plugin {
 	private const OPTION_BLOG_CONTENT_MAX_WIDTH = 'quarantined_cpt_bodyclean_blog_content_max_width';
 
 	/**
+	 * Option key storing blog body text color.
+	 */
+	private const OPTION_BLOG_TEXT_COLOR = 'quarantined_cpt_bodyclean_blog_text_color';
+
+	/**
+	 * Option key storing blog link color.
+	 */
+	private const OPTION_BLOG_LINK_COLOR = 'quarantined_cpt_bodyclean_blog_link_color';
+
+	/**
+	 * Option key storing blog link hover color.
+	 */
+	private const OPTION_BLOG_LINK_HOVER_COLOR = 'quarantined_cpt_bodyclean_blog_link_hover_color';
+
+	/**
 	 * Option key storing key takeaway/TOC panel background color.
 	 */
 	private const OPTION_BLOG_PANEL_BG = 'quarantined_cpt_bodyclean_blog_panel_bg';
@@ -171,6 +186,11 @@ final class Plugin {
 	 * Option key storing wide CTA button text color.
 	 */
 	private const OPTION_BLOG_CTA_BUTTON_TEXT = 'quarantined_cpt_bodyclean_blog_cta_button_text';
+
+	/**
+	 * Option key storing wide CTA button hover background color.
+	 */
+	private const OPTION_BLOG_CTA_BUTTON_HOVER = 'quarantined_cpt_bodyclean_blog_cta_button_hover';
 
 	/**
 	 * Option key storing default primary CTA title.
@@ -221,6 +241,11 @@ final class Plugin {
 	 * Option key storing optional archive layout overrides per CPT.
 	 */
 	private const OPTION_ARCHIVE_BY_CPT = 'quarantined_cpt_bodyclean_archive_by_cpt';
+
+	/**
+	 * Option key storing optional design overrides per CPT.
+	 */
+	private const OPTION_BLOG_STYLE_BY_CPT = 'quarantined_cpt_bodyclean_blog_style_by_cpt';
 
 	/**
 	 * Option key storing author box background color.
@@ -558,6 +583,13 @@ final class Plugin {
 	 * @var array|null
 	 */
 	private $cpt_definitions = null;
+
+	/**
+	 * Tracks slug renames during a settings save request.
+	 *
+	 * @var array<string,string>
+	 */
+	private $pending_cpt_slug_renames = [];
 
 	/**
 	 * Ensures the plugin is bootstrapped once.
@@ -1361,6 +1393,9 @@ final class Plugin {
 	private function get_blog_style_defaults_for_preset( string $preset ): array {
 		$defaults = [
 			'theme'    => [
+				'text_color'           => '',
+				'link_color'           => '',
+				'link_hover_color'     => '',
 				'panel_background'     => 'transparent',
 				'panel_border'         => 'rgba(15,23,42,0.16)',
 				'meta_border'          => 'rgba(15,23,42,0.16)',
@@ -1368,9 +1403,9 @@ final class Plugin {
 				'share_background_hover'=> 'rgba(15,23,42,0.06)',
 				'share_border'         => 'rgba(15,23,42,0.22)',
 				'cta_background'       => '#e9efff',
-				'cta_button_background'=> '#1d4ed8',
-				'cta_button_text'      => '#ffffff',
-				'cta_button_hover'     => '#1b44bb',
+				'cta_button_background'=> '',
+				'cta_button_text'      => '',
+				'cta_button_hover'     => '',
 				'author_box_background'=> 'transparent',
 				'author_box_border'    => 'rgba(15,23,42,0.16)',
 				'card_radius'          => '0.55rem',
@@ -1379,6 +1414,9 @@ final class Plugin {
 				'card_border'          => '1px solid rgba(15,23,42,0.16)',
 			],
 			'balanced' => [
+				'text_color'           => '',
+				'link_color'           => '',
+				'link_hover_color'     => '',
 				'panel_background'     => '#f6f7f9',
 				'panel_border'         => 'rgba(15,23,42,0.12)',
 				'meta_border'          => 'rgba(15,23,42,0.12)',
@@ -1397,6 +1435,9 @@ final class Plugin {
 				'card_border'          => '1px solid transparent',
 			],
 			'enhanced' => [
+				'text_color'           => '',
+				'link_color'           => '',
+				'link_hover_color'     => '',
 				'panel_background'     => '#f8fafc',
 				'panel_border'         => 'rgba(15,23,42,0.14)',
 				'meta_border'          => 'rgba(15,23,42,0.14)',
@@ -1443,6 +1484,9 @@ final class Plugin {
 		$settings['content_max_width'] = $this->get_blog_content_max_width_setting();
 
 		$color_map = [
+			self::OPTION_BLOG_TEXT_COLOR        => 'text_color',
+			self::OPTION_BLOG_LINK_COLOR        => 'link_color',
+			self::OPTION_BLOG_LINK_HOVER_COLOR  => 'link_hover_color',
 			self::OPTION_BLOG_PANEL_BG         => 'panel_background',
 			self::OPTION_BLOG_PANEL_BORDER     => 'panel_border',
 			self::OPTION_BLOG_META_BORDER      => 'meta_border',
@@ -1451,6 +1495,7 @@ final class Plugin {
 			self::OPTION_BLOG_CTA_BG           => 'cta_background',
 			self::OPTION_BLOG_CTA_BUTTON_BG    => 'cta_button_background',
 			self::OPTION_BLOG_CTA_BUTTON_TEXT  => 'cta_button_text',
+			self::OPTION_BLOG_CTA_BUTTON_HOVER => 'cta_button_hover',
 			self::OPTION_BLOG_AUTHOR_BOX_BG    => 'author_box_background',
 			self::OPTION_BLOG_AUTHOR_BOX_BORDER=> 'author_box_border',
 		];
@@ -1469,7 +1514,81 @@ final class Plugin {
 			$settings['card_radius'] = $custom_card_radius;
 		}
 
+		if ( '' === (string) ( $settings['link_hover_color'] ?? '' ) && '' !== (string) ( $settings['link_color'] ?? '' ) ) {
+			$settings['link_hover_color'] = (string) $settings['link_color'];
+		}
+
+		if ( '' === (string) ( $settings['cta_button_hover'] ?? '' ) && '' !== (string) ( $settings['cta_button_background'] ?? '' ) ) {
+			$settings['cta_button_hover'] = (string) $settings['cta_button_background'];
+		}
+
 		return apply_filters( 'quarantined_cpt_bodyclean/blog_style_settings', $settings, $preset, $defaults, $this );
+	}
+
+	/**
+	 * Returns an empty per-CPT blog style override payload.
+	 *
+	 * @return array<string,string>
+	 */
+	private function get_empty_blog_style_override_payload(): array {
+		return [
+			'text_color'            => '',
+			'link_color'            => '',
+			'link_hover_color'      => '',
+			'cta_button_background' => '',
+			'cta_button_text'       => '',
+			'cta_button_hover'      => '',
+		];
+	}
+
+	/**
+	 * Returns per-CPT blog style override map.
+	 *
+	 * @return array<string,array<string,string>>
+	 */
+	private function get_blog_style_overrides_by_cpt(): array {
+		$saved = get_option( self::OPTION_BLOG_STYLE_BY_CPT, [] );
+
+		return $this->sanitize_blog_style_overrides_by_cpt( $saved );
+	}
+
+	/**
+	 * Returns effective blog style settings for a specific CPT.
+	 *
+	 * @param string $post_type CPT key.
+	 * @return array<string,string>
+	 */
+	private function get_blog_style_settings_for_type( string $post_type ): array {
+		$settings  = $this->get_blog_style_settings();
+		$post_type = sanitize_key( $post_type );
+
+		if ( '' === $post_type ) {
+			return $settings;
+		}
+
+		$overrides = $this->get_blog_style_overrides_by_cpt();
+
+		if ( ! isset( $overrides[ $post_type ] ) || ! is_array( $overrides[ $post_type ] ) ) {
+			return $settings;
+		}
+
+		foreach ( $this->get_empty_blog_style_override_payload() as $key => $default ) {
+			$override = isset( $overrides[ $post_type ][ $key ] ) ? (string) $overrides[ $post_type ][ $key ] : '';
+
+			if ( '' !== $override ) {
+				$settings[ $key ] = $override;
+			}
+		}
+
+		if ( '' === (string) ( $settings['link_hover_color'] ?? '' ) && '' !== (string) ( $settings['link_color'] ?? '' ) ) {
+			$settings['link_hover_color'] = (string) $settings['link_color'];
+		}
+
+		if ( '' === (string) ( $settings['cta_button_hover'] ?? '' ) && '' !== (string) ( $settings['cta_button_background'] ?? '' ) ) {
+			$settings['cta_button_hover'] = (string) $settings['cta_button_background'];
+		}
+
+		return $settings;
 	}
 
 	/**
@@ -2062,17 +2181,26 @@ final class Plugin {
 			esc_attr( $offset )
 		);
 
-		$style_settings  = $this->get_blog_style_settings();
 		$style_post_type = $this->detect_component_post_type_context();
+		$style_settings  = $this->get_blog_style_settings_for_type( $style_post_type );
 		$component_order = $this->get_component_order_settings_for_type( $style_post_type );
+		$social_color    = '' !== trim( (string) ( $style_settings['link_color'] ?? '' ) )
+			? (string) $style_settings['link_color']
+			: (string) ( $style_settings['text_color'] ?? '' );
 		$style_rules    = [
 			'--quarantined-cpt-entry-max-width'      => (string) ( $style_settings['content_max_width'] ?? self::DEFAULT_BLOG_CONTENT_MAX_WIDTH ),
+			'--quarantined-cpt-text-color'           => (string) ( $style_settings['text_color'] ?? '' ),
+			'--quarantined-cpt-link-color'           => (string) ( $style_settings['link_color'] ?? '' ),
+			'--quarantined-cpt-link-hover-color'     => (string) ( $style_settings['link_hover_color'] ?? '' ),
 			'--quarantined-cpt-panel-background'     => (string) ( $style_settings['panel_background'] ?? '' ),
 			'--quarantined-cpt-panel-border-color'   => (string) ( $style_settings['panel_border'] ?? '' ),
 			'--quarantined-cpt-meta-divider-color'   => (string) ( $style_settings['meta_border'] ?? '' ),
 			'--quarantined-cpt-share-bg'             => (string) ( $style_settings['share_background'] ?? '' ),
 			'--quarantined-cpt-share-bg-hover'       => (string) ( $style_settings['share_background_hover'] ?? '' ),
 			'--quarantined-cpt-share-border'         => (string) ( $style_settings['share_border'] ?? '' ),
+			'--quarantined-cpt-social-color'         => $social_color,
+			'--quarantined-cpt-social-background'    => (string) ( $style_settings['share_background'] ?? '' ),
+			'--quarantined-cpt-social-background-hover' => (string) ( $style_settings['share_background_hover'] ?? '' ),
 			'--quarantined-cpt-cta-bg'               => (string) ( $style_settings['cta_background'] ?? '' ),
 			'--quarantined-cpt-cta-button-bg'        => (string) ( $style_settings['cta_button_background'] ?? '' ),
 			'--quarantined-cpt-cta-button-text'      => (string) ( $style_settings['cta_button_text'] ?? '' ),
@@ -2500,15 +2628,15 @@ final class Plugin {
 				'\tmin-height: 2.4rem !important;',
 				'\tborder-radius: 999px !important;',
 				'\ttext-decoration: none !important;',
-				'\tcolor: rgba(15, 23, 42, 0.85) !important;',
-				'\tbackground-color: rgba(15, 23, 42, 0.08) !important;',
+				'\tcolor: var(--quarantined-cpt-social-color, var(--quarantined-cpt-link-color, var(--quarantined-cpt-text-color, inherit))) !important;',
+				'\tbackground-color: var(--quarantined-cpt-social-background, var(--quarantined-cpt-share-bg, rgba(15, 23, 42, 0.08))) !important;',
 				'\tline-height: 0 !important;',
 				'\ttransition: background-color 0.2s ease, transform 0.2s ease !important;',
 				'}',
 				'',
 				'main.quarantined-cpt .quarantined-cpt__author-social a:hover,',
 				'main.quarantined-cpt .quarantined-cpt__author-social a:focus {',
-				'\tbackground-color: rgba(15, 23, 42, 0.16) !important;',
+				'\tbackground-color: var(--quarantined-cpt-social-background-hover, var(--quarantined-cpt-share-bg-hover, rgba(15, 23, 42, 0.16))) !important;',
 				'\ttransform: translateY(-1px) !important;',
 				'}',
 				'',
@@ -7045,6 +7173,36 @@ final class Plugin {
 
 		register_setting(
 			'quarantined_cpt_bodyclean',
+			self::OPTION_BLOG_TEXT_COLOR,
+			[
+				'type'              => 'string',
+				'sanitize_callback' => [ $this, 'sanitize_blog_color_option' ],
+				'default'           => '',
+			]
+		);
+
+		register_setting(
+			'quarantined_cpt_bodyclean',
+			self::OPTION_BLOG_LINK_COLOR,
+			[
+				'type'              => 'string',
+				'sanitize_callback' => [ $this, 'sanitize_blog_color_option' ],
+				'default'           => '',
+			]
+		);
+
+		register_setting(
+			'quarantined_cpt_bodyclean',
+			self::OPTION_BLOG_LINK_HOVER_COLOR,
+			[
+				'type'              => 'string',
+				'sanitize_callback' => [ $this, 'sanitize_blog_color_option' ],
+				'default'           => '',
+			]
+		);
+
+		register_setting(
+			'quarantined_cpt_bodyclean',
 			self::OPTION_BLOG_PANEL_BG,
 			[
 				'type'              => 'string',
@@ -7116,6 +7274,16 @@ final class Plugin {
 		register_setting(
 			'quarantined_cpt_bodyclean',
 			self::OPTION_BLOG_CTA_BUTTON_TEXT,
+			[
+				'type'              => 'string',
+				'sanitize_callback' => [ $this, 'sanitize_blog_color_option' ],
+				'default'           => '',
+			]
+		);
+
+		register_setting(
+			'quarantined_cpt_bodyclean',
+			self::OPTION_BLOG_CTA_BUTTON_HOVER,
 			[
 				'type'              => 'string',
 				'sanitize_callback' => [ $this, 'sanitize_blog_color_option' ],
@@ -7219,6 +7387,16 @@ final class Plugin {
 			[
 				'type'              => 'array',
 				'sanitize_callback' => [ $this, 'sanitize_archive_settings_by_cpt' ],
+				'default'           => [],
+			]
+		);
+
+		register_setting(
+			'quarantined_cpt_bodyclean',
+			self::OPTION_BLOG_STYLE_BY_CPT,
+			[
+				'type'              => 'array',
+				'sanitize_callback' => [ $this, 'sanitize_blog_style_overrides_by_cpt' ],
 				'default'           => [],
 			]
 		);
@@ -7568,6 +7746,9 @@ final class Plugin {
 		$blog_style_preset   = $this->get_blog_style_preset();
 		$blog_style_presets  = $this->get_blog_style_preset_options();
 		$blog_content_width  = $this->get_blog_content_max_width_setting();
+		$blog_text_color     = $this->get_blog_color_option_value( self::OPTION_BLOG_TEXT_COLOR );
+		$blog_link_color     = $this->get_blog_color_option_value( self::OPTION_BLOG_LINK_COLOR );
+		$blog_link_hover     = $this->get_blog_color_option_value( self::OPTION_BLOG_LINK_HOVER_COLOR );
 		$blog_panel_bg       = $this->get_blog_color_option_value( self::OPTION_BLOG_PANEL_BG );
 		$blog_panel_border   = $this->get_blog_color_option_value( self::OPTION_BLOG_PANEL_BORDER );
 		$blog_meta_border    = $this->get_blog_color_option_value( self::OPTION_BLOG_META_BORDER );
@@ -7576,12 +7757,14 @@ final class Plugin {
 		$blog_cta_bg         = $this->get_blog_color_option_value( self::OPTION_BLOG_CTA_BG );
 		$blog_cta_button_bg  = $this->get_blog_color_option_value( self::OPTION_BLOG_CTA_BUTTON_BG );
 		$blog_cta_button_txt = $this->get_blog_color_option_value( self::OPTION_BLOG_CTA_BUTTON_TEXT );
+		$blog_cta_button_hover = $this->get_blog_color_option_value( self::OPTION_BLOG_CTA_BUTTON_HOVER );
 		$primary_cta_global  = $this->get_blog_global_cta_defaults( 'primary' );
 		$after_cta_global    = $this->get_blog_global_cta_defaults( 'after_related' );
 		$archive_default_posts_per_page = $this->get_archive_default_posts_per_page();
 		$blog_author_bg      = $this->get_blog_color_option_value( self::OPTION_BLOG_AUTHOR_BOX_BG );
 		$blog_author_border  = $this->get_blog_color_option_value( self::OPTION_BLOG_AUTHOR_BOX_BORDER );
 		$blog_card_radius    = $this->get_blog_card_radius_setting();
+		$style_overrides_by_cpt = $this->get_blog_style_overrides_by_cpt();
 		$schema_choices      = $this->get_article_schema_choices();
 
 		?>
@@ -7838,6 +8021,18 @@ final class Plugin {
 								</td>
 							</tr>
 							<tr>
+								<th scope="row"><label for="quarantined-cpt-text-color"><?php esc_html_e( 'Body text color', 'nova-bridge-suite' ); ?></label></th>
+								<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-text-color" name="<?php echo esc_attr( self::OPTION_BLOG_TEXT_COLOR ); ?>" value="<?php echo esc_attr( $blog_text_color ); ?>" placeholder="<?php esc_attr_e( 'Theme default', 'nova-bridge-suite' ); ?>" /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="quarantined-cpt-link-color"><?php esc_html_e( 'Internal link color', 'nova-bridge-suite' ); ?></label></th>
+								<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-link-color" name="<?php echo esc_attr( self::OPTION_BLOG_LINK_COLOR ); ?>" value="<?php echo esc_attr( $blog_link_color ); ?>" placeholder="<?php esc_attr_e( 'Theme default', 'nova-bridge-suite' ); ?>" /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="quarantined-cpt-link-hover"><?php esc_html_e( 'Internal link hover color', 'nova-bridge-suite' ); ?></label></th>
+								<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-link-hover" name="<?php echo esc_attr( self::OPTION_BLOG_LINK_HOVER_COLOR ); ?>" value="<?php echo esc_attr( $blog_link_hover ); ?>" placeholder="<?php esc_attr_e( 'Same as link color', 'nova-bridge-suite' ); ?>" /></td>
+							</tr>
+							<tr>
 								<th scope="row"><label for="quarantined-cpt-panel-bg"><?php esc_html_e( 'Panel background', 'nova-bridge-suite' ); ?></label></th>
 								<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-panel-bg" name="<?php echo esc_attr( self::OPTION_BLOG_PANEL_BG ); ?>" value="<?php echo esc_attr( $blog_panel_bg ); ?>" placeholder="#f6f7f9" /></td>
 							</tr>
@@ -7868,6 +8063,10 @@ final class Plugin {
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-cta-button-text"><?php esc_html_e( 'CTA button text', 'nova-bridge-suite' ); ?></label></th>
 								<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-cta-button-text" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BUTTON_TEXT ); ?>" value="<?php echo esc_attr( $blog_cta_button_txt ); ?>" placeholder="#ffffff" /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="quarantined-cpt-cta-button-hover"><?php esc_html_e( 'CTA button hover background', 'nova-bridge-suite' ); ?></label></th>
+								<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-cta-button-hover" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BUTTON_HOVER ); ?>" value="<?php echo esc_attr( $blog_cta_button_hover ); ?>" placeholder="<?php esc_attr_e( 'Same as CTA button background', 'nova-bridge-suite' ); ?>" /></td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-author-bg"><?php esc_html_e( 'Author box background', 'nova-bridge-suite' ); ?></label></th>
@@ -8008,6 +8207,7 @@ final class Plugin {
 										: false;
 									$tab_archive_bottom = isset( $tab_archive['content_after_cta'] ) ? (string) $tab_archive['content_after_cta'] : '';
 									$tab_archive_posts_per_page = isset( $tab_archive['posts_per_page'] ) ? (string) absint( $tab_archive['posts_per_page'] ) : '';
+									$tab_style       = isset( $style_overrides_by_cpt[ $tab_slug ] ) && is_array( $style_overrides_by_cpt[ $tab_slug ] ) ? $style_overrides_by_cpt[ $tab_slug ] : $this->get_empty_blog_style_override_payload();
 
 									usort(
 										$tab_order_keys,
@@ -8076,6 +8276,37 @@ final class Plugin {
 												</li>
 											<?php endforeach; ?>
 										</ol>
+
+										<details class="quarantined-cpt-settings__dropdown quarantined-cpt-settings__dropdown--optional">
+											<summary><?php esc_html_e( 'Color overrides for this specific CPT (Optional)', 'nova-bridge-suite' ); ?></summary>
+											<p class="description"><?php esc_html_e( 'Leave empty to inherit the global design controls or your site theme. Use this when one CPT should have a different text, link, or button color treatment than the others.', 'nova-bridge-suite' ); ?></p>
+											<table class="form-table quarantined-cpt-settings__nested-table" role="presentation">
+												<tr>
+													<th scope="row"><label for="quarantined-cpt-style-text-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Body text color', 'nova-bridge-suite' ); ?></label></th>
+													<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-style-text-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_STYLE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][text_color]" value="<?php echo esc_attr( (string) ( $tab_style['text_color'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( '' !== $blog_text_color ? $blog_text_color : __( 'Theme default', 'nova-bridge-suite' ) ); ?>" /></td>
+												</tr>
+												<tr>
+													<th scope="row"><label for="quarantined-cpt-style-link-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Internal link color', 'nova-bridge-suite' ); ?></label></th>
+													<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-style-link-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_STYLE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][link_color]" value="<?php echo esc_attr( (string) ( $tab_style['link_color'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( '' !== $blog_link_color ? $blog_link_color : __( 'Theme default', 'nova-bridge-suite' ) ); ?>" /></td>
+												</tr>
+												<tr>
+													<th scope="row"><label for="quarantined-cpt-style-link-hover-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Internal link hover color', 'nova-bridge-suite' ); ?></label></th>
+													<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-style-link-hover-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_STYLE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][link_hover_color]" value="<?php echo esc_attr( (string) ( $tab_style['link_hover_color'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( '' !== $blog_link_hover ? $blog_link_hover : __( 'Same as link color', 'nova-bridge-suite' ) ); ?>" /></td>
+												</tr>
+												<tr>
+													<th scope="row"><label for="quarantined-cpt-style-button-bg-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA button background', 'nova-bridge-suite' ); ?></label></th>
+													<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-style-button-bg-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_STYLE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_button_background]" value="<?php echo esc_attr( (string) ( $tab_style['cta_button_background'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( '' !== $blog_cta_button_bg ? $blog_cta_button_bg : __( 'Theme default', 'nova-bridge-suite' ) ); ?>" /></td>
+												</tr>
+												<tr>
+													<th scope="row"><label for="quarantined-cpt-style-button-text-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA button text', 'nova-bridge-suite' ); ?></label></th>
+													<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-style-button-text-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_STYLE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_button_text]" value="<?php echo esc_attr( (string) ( $tab_style['cta_button_text'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( '' !== $blog_cta_button_txt ? $blog_cta_button_txt : __( 'Theme default', 'nova-bridge-suite' ) ); ?>" /></td>
+												</tr>
+												<tr>
+													<th scope="row"><label for="quarantined-cpt-style-button-hover-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA button hover background', 'nova-bridge-suite' ); ?></label></th>
+													<td><input type="text" class="regular-text quarantined-cpt-color-control__value" id="quarantined-cpt-style-button-hover-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_STYLE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_button_hover]" value="<?php echo esc_attr( (string) ( $tab_style['cta_button_hover'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( '' !== $blog_cta_button_hover ? $blog_cta_button_hover : __( 'Same as CTA button background', 'nova-bridge-suite' ) ); ?>" /></td>
+												</tr>
+											</table>
+										</details>
 
 										<details class="quarantined-cpt-settings__dropdown quarantined-cpt-settings__dropdown--optional">
 											<summary><?php esc_html_e( 'CTA defaults overwrites for this specific CPT (Optional)', 'nova-bridge-suite' ); ?></summary>
@@ -8596,10 +8827,13 @@ final class Plugin {
 	 * @return string Sanitized value stored in the database.
 	 */
 	public function sanitize_cpt_definitions_option( $value ): array {
+		$this->pending_cpt_slug_renames = [];
+
 		if ( ! is_array( $value ) ) {
 			return [];
 		}
 
+		$rename_map = $this->capture_cpt_slug_rename_map( $value );
 		$clean = [];
 
 		foreach ( $value as $definition ) {
@@ -8647,7 +8881,31 @@ final class Plugin {
 			];
 		}
 
-		return array_values( $clean );
+		$clean_values = array_values( $clean );
+
+		if ( ! empty( $rename_map ) ) {
+			$valid_targets = [];
+
+			foreach ( $clean_values as $definition ) {
+				if ( is_array( $definition ) && ! empty( $definition['type'] ) ) {
+					$valid_targets[] = sanitize_key( (string) $definition['type'] );
+				}
+			}
+
+			$rename_map = array_filter(
+				$rename_map,
+				static function ( string $new_slug ) use ( $valid_targets ): bool {
+					return in_array( sanitize_key( $new_slug ), $valid_targets, true );
+				}
+			);
+		}
+
+		if ( ! empty( $rename_map ) ) {
+			$this->pending_cpt_slug_renames = $rename_map;
+			$this->migrate_posts_for_cpt_slug_renames( $rename_map );
+		}
+
+		return $clean_values;
 	}
 
 	public function sanitize_selector_input( $value ): string {
@@ -8699,7 +8957,7 @@ final class Plugin {
 			$sanitized[ $key ] = array_key_exists( $key, $value ) ? ! empty( $value[ $key ] ) : (bool) $default;
 		}
 
-		return $sanitized;
+		return $this->remap_cpt_keyed_option_payload( $sanitized );
 	}
 
 	/**
@@ -8722,7 +8980,7 @@ final class Plugin {
 			$sanitized[ $key ] = max( 0, min( 9999, $raw ) );
 		}
 
-		return $sanitized;
+		return $this->remap_cpt_keyed_option_payload( $sanitized );
 	}
 
 	/**
@@ -8755,7 +9013,7 @@ final class Plugin {
 			$sanitized[ $post_type ] = $normalized;
 		}
 
-		return $sanitized;
+		return $this->remap_cpt_keyed_option_payload( $sanitized );
 	}
 
 	/**
@@ -8789,7 +9047,7 @@ final class Plugin {
 			$sanitized[ $post_type ] = $normalized;
 		}
 
-		return $sanitized;
+		return $this->remap_cpt_keyed_option_payload( $sanitized );
 	}
 
 	/**
@@ -8843,7 +9101,7 @@ final class Plugin {
 			}
 		}
 
-		return $sanitized;
+		return $this->remap_cpt_keyed_option_payload( $sanitized );
 	}
 
 	/**
@@ -8945,7 +9203,210 @@ final class Plugin {
 			}
 		}
 
-		return $sanitized;
+		return $this->remap_cpt_keyed_option_payload( $sanitized );
+	}
+
+	/**
+	 * Sanitizes per-CPT design overrides.
+	 *
+	 * @param array|string $value Raw option value.
+	 * @return array<string,array<string,string>>
+	 */
+	public function sanitize_blog_style_overrides_by_cpt( $value ): array {
+		if ( ! is_array( $value ) ) {
+			return [];
+		}
+
+		$defaults  = $this->get_empty_blog_style_override_payload();
+		$sanitized = [];
+
+		foreach ( $value as $post_type => $payload ) {
+			$post_type = sanitize_key( (string) $post_type );
+
+			if ( '' === $post_type || ! is_array( $payload ) ) {
+				continue;
+			}
+
+			$type_payload = [];
+
+			foreach ( $defaults as $key => $default ) {
+				$clean = $this->sanitize_blog_color_option( $payload[ $key ] ?? '' );
+
+				if ( '' !== $clean ) {
+					$type_payload[ $key ] = $clean;
+				}
+			}
+
+			if ( ! empty( $type_payload ) ) {
+				$sanitized[ $post_type ] = $type_payload;
+			}
+		}
+
+		return $this->remap_cpt_keyed_option_payload( $sanitized );
+	}
+
+	/**
+	 * Re-keys per-CPT option payloads when a slug is renamed during save.
+	 *
+	 * @param array<string,mixed> $payload Existing payload keyed by CPT slug.
+	 * @return array<string,mixed>
+	 */
+	private function remap_cpt_keyed_option_payload( array $payload ): array {
+		if ( empty( $payload ) || empty( $this->pending_cpt_slug_renames ) ) {
+			return $payload;
+		}
+
+		$remapped = [];
+
+		foreach ( $payload as $post_type => $value ) {
+			$post_type = sanitize_key( (string) $post_type );
+
+			if ( '' === $post_type ) {
+				continue;
+			}
+
+			$target = $this->pending_cpt_slug_renames[ $post_type ] ?? $post_type;
+			$target = sanitize_key( (string) $target );
+
+			if ( '' === $target ) {
+				continue;
+			}
+
+			$remapped[ $target ] = $value;
+		}
+
+		return $remapped;
+	}
+
+	/**
+	 * Builds a slug rename map keyed by existing row index.
+	 *
+	 * @param array<string|int,mixed> $submitted_definitions Raw submitted definitions.
+	 * @return array<string,string>
+	 */
+	private function capture_cpt_slug_rename_map( array $submitted_definitions ): array {
+		$current_definitions = get_option( self::OPTION_CPTS, [] );
+
+		if ( ! is_array( $current_definitions ) ) {
+			return [];
+		}
+
+		$current_by_index = [];
+		foreach ( $current_definitions as $index => $definition ) {
+			if ( ! is_array( $definition ) ) {
+				continue;
+			}
+
+			$slug = $this->extract_definition_slug( $definition );
+
+			if ( '' !== $slug ) {
+				$current_by_index[ (string) $index ] = $slug;
+			}
+		}
+
+		$submitted_by_index = [];
+		foreach ( $submitted_definitions as $index => $definition ) {
+			if ( ! is_array( $definition ) ) {
+				continue;
+			}
+
+			$slug = $this->extract_definition_slug( $definition );
+
+			if ( '' !== $slug ) {
+				$submitted_by_index[ (string) $index ] = $slug;
+			}
+		}
+
+		$rename_map = [];
+
+		foreach ( $current_by_index as $index => $old_slug ) {
+			if ( ! isset( $submitted_by_index[ $index ] ) ) {
+				continue;
+			}
+
+			$new_slug = $submitted_by_index[ $index ];
+
+			if ( '' === $old_slug || '' === $new_slug || $old_slug === $new_slug ) {
+				continue;
+			}
+
+			$rename_map[ $old_slug ] = $new_slug;
+		}
+
+		return $rename_map;
+	}
+
+	/**
+	 * Extracts the normalized slug from a CPT definition payload.
+	 *
+	 * @param array<string,mixed> $definition Raw definition payload.
+	 * @return string
+	 */
+	private function extract_definition_slug( array $definition ): string {
+		$slug = isset( $definition['slug'] ) ? sanitize_title_with_dashes( (string) $definition['slug'] ) : '';
+
+		if ( '' === $slug && isset( $definition['type'] ) ) {
+			$slug = sanitize_title_with_dashes( (string) $definition['type'] );
+		}
+
+		if ( '' === $slug ) {
+			return '';
+		}
+
+		if ( strlen( $slug ) > 20 ) {
+			$slug = substr( $slug, 0, 20 );
+		}
+
+		return sanitize_key( $slug );
+	}
+
+	/**
+	 * Migrates existing posts to new CPT slugs when a row is renamed.
+	 *
+	 * @param array<string,string> $rename_map Old slug => new slug.
+	 * @return void
+	 */
+	private function migrate_posts_for_cpt_slug_renames( array $rename_map ): void {
+		global $wpdb;
+
+		foreach ( $rename_map as $old_slug => $new_slug ) {
+			$old_slug = sanitize_key( (string) $old_slug );
+			$new_slug = sanitize_key( (string) $new_slug );
+
+			if ( '' === $old_slug || '' === $new_slug || $old_slug === $new_slug ) {
+				continue;
+			}
+
+			$post_ids = get_posts(
+				[
+					'post_type'        => $old_slug,
+					'post_status'      => 'any',
+					'posts_per_page'   => -1,
+					'fields'           => 'ids',
+					'orderby'          => 'ID',
+					'order'            => 'ASC',
+					'no_found_rows'    => true,
+					'suppress_filters' => true,
+				]
+			);
+
+			if ( empty( $post_ids ) ) {
+				continue;
+			}
+
+			foreach ( $post_ids as $post_id ) {
+				$wpdb->update(
+					$wpdb->posts,
+					[ 'post_type' => $new_slug ],
+					[ 'ID' => (int) $post_id ],
+					[ '%s' ],
+					[ '%d' ]
+				);
+				clean_post_cache( (int) $post_id );
+			}
+
+			self::log( 'Migrated ' . count( $post_ids ) . ' posts from ' . $old_slug . ' to ' . $new_slug );
+		}
 	}
 
 	public function sanitize_text_option( $value ): string {

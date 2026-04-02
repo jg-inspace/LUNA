@@ -1,5 +1,6 @@
 .quarantined-cpt {
 	margin: 0;
+	color: var(--quarantined-cpt-text-color, inherit);
 }
 
 .quarantined-cpt__inner {
@@ -250,6 +251,51 @@ body.admin-bar.quarantined-cpt-author .quarantined-cpt__inner {
 
 .quarantined-cpt__content {
 	line-height: 1.7;
+}
+
+.quarantined-cpt__description a,
+.quarantined-cpt__archive-intro a,
+.quarantined-cpt__meta a,
+.quarantined-cpt__crumb a,
+.quarantined-cpt__author-chip-text a,
+.quarantined-cpt__content a,
+.quarantined-cpt__panel a,
+.quarantined-cpt__wide-cta-copy a,
+.quarantined-cpt__author-box-description a,
+.quarantined-cpt__card-title a,
+.quarantined-cpt__author-role a,
+.quarantined-cpt__author-location a,
+.quarantined-cpt__author-box-name a {
+	color: var(--quarantined-cpt-link-color, inherit);
+}
+
+.quarantined-cpt__description a:hover,
+.quarantined-cpt__description a:focus,
+.quarantined-cpt__archive-intro a:hover,
+.quarantined-cpt__archive-intro a:focus,
+.quarantined-cpt__meta a:hover,
+.quarantined-cpt__meta a:focus,
+.quarantined-cpt__crumb a:hover,
+.quarantined-cpt__crumb a:focus,
+.quarantined-cpt__author-chip-text a:hover,
+.quarantined-cpt__author-chip-text a:focus,
+.quarantined-cpt__content a:hover,
+.quarantined-cpt__content a:focus,
+.quarantined-cpt__panel a:hover,
+.quarantined-cpt__panel a:focus,
+.quarantined-cpt__wide-cta-copy a:hover,
+.quarantined-cpt__wide-cta-copy a:focus,
+.quarantined-cpt__author-box-description a:hover,
+.quarantined-cpt__author-box-description a:focus,
+.quarantined-cpt__card-title a:hover,
+.quarantined-cpt__card-title a:focus,
+.quarantined-cpt__author-role a:hover,
+.quarantined-cpt__author-role a:focus,
+.quarantined-cpt__author-location a:hover,
+.quarantined-cpt__author-location a:focus,
+.quarantined-cpt__author-box-name a:hover,
+.quarantined-cpt__author-box-name a:focus {
+	color: var(--quarantined-cpt-link-hover-color, var(--quarantined-cpt-link-color, inherit));
 }
 
 .quarantined-cpt__content > *:first-child {
@@ -633,15 +679,16 @@ body.admin-bar.quarantined-cpt-author .quarantined-cpt__inner {
 	justify-content: center;
 	padding: 0.6rem 1.2rem;
 	border-radius: 999px;
-	background: var(--quarantined-cpt-cta-button-bg, #1d4ed8);
-	color: var(--quarantined-cpt-cta-button-text, #fff);
+	background: var(--quarantined-cpt-cta-button-bg, var(--wp--preset--color--primary, currentColor));
+	color: var(--quarantined-cpt-cta-button-text, var(--wp--preset--color--base, var(--wp--preset--color--background, #fff)));
 	text-decoration: none;
 	font-weight: 600;
 }
 
 .quarantined-cpt__wide-cta-button:hover,
 .quarantined-cpt__wide-cta-button:focus {
-	background: var(--quarantined-cpt-cta-button-hover-bg, #1b44bb);
+	background: var(--quarantined-cpt-cta-button-hover-bg, var(--quarantined-cpt-cta-button-bg, var(--wp--preset--color--primary, currentColor)));
+	color: var(--quarantined-cpt-cta-button-text, var(--wp--preset--color--base, var(--wp--preset--color--background, #fff)));
 }
 
 .quarantined-cpt__related {

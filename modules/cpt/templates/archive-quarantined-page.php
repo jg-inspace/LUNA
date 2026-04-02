@@ -29,6 +29,21 @@ if ( ! is_string( $archive_post_type ) || '' === $archive_post_type ) {
 }
 
 $archive_post_type = sanitize_key( (string) $archive_post_type );
+$archive_post_type_object = '' !== $archive_post_type ? get_post_type_object( $archive_post_type ) : null;
+$archive_empty_label      = $archive_title;
+
+if ( $archive_post_type_object instanceof \WP_Post_Type && isset( $archive_post_type_object->labels->name ) ) {
+	$archive_empty_label = (string) $archive_post_type_object->labels->name;
+}
+
+if ( '' === trim( $archive_empty_label ) ) {
+	$archive_empty_label = __( 'posts', 'nova-bridge-suite' );
+}
+
+$archive_empty_label = function_exists( 'mb_strtolower' )
+	? mb_strtolower( $archive_empty_label )
+	: strtolower( $archive_empty_label );
+
 $archive_layout    = \SEORAI\BodycleanCPT\Plugin::get_archive_layout_data( $archive_post_type );
 $archive_intro     = isset( $archive_layout['intro'] ) ? (string) $archive_layout['intro'] : '';
 $archive_intro_has_text = '' !== trim( wp_strip_all_tags( $archive_intro ) );
@@ -234,7 +249,7 @@ if ( $show_breadcrumbs ) {
 			<?php endif; ?>
 		<?php else : ?>
 			<p class="quarantined-cpt__empty">
-				<?php esc_html_e( 'Er zijn momenteel geen quarantined pagina\'s beschikbaar.', 'nova-bridge-suite' ); ?>
+				<?php echo esc_html( sprintf( __( 'Er zijn momenteel geen %s beschikbaar.', 'nova-bridge-suite' ), $archive_empty_label ) ); ?>
 			</p>
 		<?php endif; ?>
 	</div>
