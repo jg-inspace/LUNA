@@ -2,7 +2,7 @@
 Contributors: jg-inspace
 Tags: seo, automation, content, rest-api, page builder
 Requires at least: 6.0
-Tested up to: 6.9.1
+Tested up to: 6.9
 Requires PHP: 7.4
 Stable tag: 2.3.11
 License: Proprietary
@@ -45,6 +45,7 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 * Let Blog CPT text, links, and CTA buttons inherit site styling by default, with optional per-CPT color overrides in the settings UI.
 * Move existing posts to the renamed Blog CPT slug during settings saves and remap CPT-specific design and layout overrides to the new slug.
 * Use the active CPT label in empty archive messages instead of the old hardcoded fallback copy.
+* Mark the release metadata as tested through WordPress 6.9 so 6.9.4 sites report compatibility correctly.
 
 = 2.3.10 =
 * Make the Blog CPT table of contents expand to full width when key takeaways are empty instead of leaving the takeaways column blank.

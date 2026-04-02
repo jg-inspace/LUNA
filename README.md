@@ -2,7 +2,7 @@
 
 - Contributors: jg@inspace.io, ad@inspace.io, lm@inspace.io
 - Requires at least: 6.0
-- Tested up to: 6.9.1
+- Tested up to: 6.9
 - Requires PHP: 7.4
 - Stable tag: 2.3.11
 - License: Proprietary
@@ -52,6 +52,7 @@ Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is ac
 - Let Blog CPT text, links, and CTA buttons inherit site styling by default, with optional per-CPT color overrides in the settings UI.
 - Move existing posts to the renamed Blog CPT slug during settings saves and remap CPT-specific design and layout overrides to the new slug.
 - Use the active CPT label in empty archive messages instead of the old hardcoded fallback copy.
+- Mark the release metadata as tested through WordPress 6.9 so 6.9.4 sites report compatibility correctly.
 
 ### 2.3.10
 
