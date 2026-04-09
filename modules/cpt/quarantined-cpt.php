@@ -350,6 +350,33 @@ final class Plugin {
 	private const OPTION_LABEL_PUBLICATIONS = 'quarantined_cpt_bodyclean_label_publications';
 
 	/**
+	 * Settings that should save per language when WPML or Polylang is active.
+	 */
+	private const LOCALIZED_SETTINGS_OPTIONS = [
+		self::OPTION_AUTHOR_ARCHIVE_TITLE,
+		self::OPTION_CPT_SINGULAR,
+		self::OPTION_CPT_PLURAL,
+		self::OPTION_BLOG_CTA_PRIMARY_TITLE,
+		self::OPTION_BLOG_CTA_PRIMARY_COPY,
+		self::OPTION_BLOG_CTA_PRIMARY_BUTTON_LABEL,
+		self::OPTION_BLOG_CTA_PRIMARY_BUTTON_URL,
+		self::OPTION_BLOG_CTA_AFTER_RELATED_TITLE,
+		self::OPTION_BLOG_CTA_AFTER_RELATED_COPY,
+		self::OPTION_BLOG_CTA_AFTER_RELATED_BUTTON_LABEL,
+		self::OPTION_BLOG_CTA_AFTER_RELATED_BUTTON_URL,
+		self::OPTION_BLOG_CTA_BY_CPT,
+		self::OPTION_ARCHIVE_BY_CPT,
+		self::OPTION_LABEL_AUTHOR,
+		self::OPTION_LABEL_KEY_TAKEAWAYS,
+		self::OPTION_LABEL_TOC,
+		self::OPTION_LABEL_TOC_READ_MORE,
+		self::OPTION_LABEL_TOC_READ_LESS,
+		self::OPTION_LABEL_RELATED_ARTICLES,
+		self::OPTION_LABEL_FAQ_TITLE,
+		self::OPTION_LABEL_PUBLICATIONS,
+	];
+
+	/**
 	 * Default author label text.
 	 */
 	private const DEFAULT_LABEL_AUTHOR = 'Door';
@@ -1707,11 +1734,25 @@ final class Plugin {
 		return $this->sanitize_label_language_option( $stored );
 	}
 
+	private function get_settings_option_name( string $option ): string {
+		return \Nova_Bridge_Suite_WPML_Support::get_localized_option_name( $option );
+	}
+
 	private function get_effective_label_language(): string {
 		$selected = $this->get_selected_label_language();
 
 		if ( 'auto' !== $selected ) {
 			return $selected;
+		}
+
+		$multilingual_language = \Nova_Bridge_Suite_WPML_Support::get_current_language_code();
+
+		if ( '' !== $multilingual_language ) {
+			$prefix = strtolower( substr( sanitize_key( $multilingual_language ), 0, 2 ) );
+
+			if ( in_array( $prefix, [ 'en', 'nl', 'de', 'fr', 'es', 'pt', 'it', 'pl', 'sv', 'da', 'no', 'fi', 'cs', 'ro', 'tr' ], true ) ) {
+				return $prefix;
+			}
 		}
 
 		$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
@@ -7534,6 +7575,11 @@ final class Plugin {
 				'default'           => false,
 			]
 		);
+
+		\Nova_Bridge_Suite_WPML_Support::register_localized_settings(
+			'quarantined_cpt_bodyclean',
+			self::LOCALIZED_SETTINGS_OPTIONS
+		);
 	}
 
 	/**
@@ -7695,6 +7741,14 @@ final class Plugin {
 			return;
 		}
 
+		$settings_language_context = \Nova_Bridge_Suite_WPML_Support::get_settings_language_context();
+		$settings_language_links   = \Nova_Bridge_Suite_WPML_Support::get_settings_language_links(
+			admin_url( 'options-general.php?page=quarantined-cpt-bodyclean' )
+		);
+		$settings_form_action      = \Nova_Bridge_Suite_WPML_Support::get_settings_form_action_url();
+		$settings_form_language    = (string) ( $settings_language_context['current'] ?? '' );
+		$settings_form_default_language = (string) ( $settings_language_context['default'] ?? '' );
+
 		$raw = get_option( self::OPTION_EXCLUDE_SELECTORS, '' );
 		$value = is_array( $raw ) ? implode( "\n", $raw ) : (string) $raw;
 		$value = trim( $value );
@@ -7771,11 +7825,58 @@ final class Plugin {
 		?>
 		<div class="wrap">
 		<h1><?php esc_html_e( 'NOVA Blog Settings', 'nova-bridge-suite' ); ?></h1>
+		<?php if ( ! empty( $settings_language_context ) ) : ?>
+			<div class="notice notice-info inline">
+				<p>
+					<?php
+					printf(
+						/* translators: 1: multilingual plugin name, 2: current language code, 3: default language code. */
+						esc_html__( '%1$s is active. Label, CTA, and archive-content settings on this screen save for the current language (%2$s) and fall back to the default language (%3$s) until overridden. CPT slugs, registration toggles, definitions, styling, and layout controls stay global and only save on the default language tab.', 'nova-bridge-suite' ),
+						esc_html( (string) ( $settings_language_context['provider'] ?? 'Multilingual' ) ),
+						esc_html( strtoupper( (string) ( $settings_language_context['current'] ?? '' ) ) ),
+						esc_html( strtoupper( (string) ( $settings_language_context['default'] ?? '' ) ) )
+					);
+					?>
+				</p>
+			</div>
+		<?php endif; ?>
+		<?php if ( ! empty( $settings_language_links ) ) : ?>
+			<h2 class="nav-tab-wrapper" style="margin-bottom:12px;">
+				<?php foreach ( $settings_language_links as $language_link ) : ?>
+					<?php
+					$classes = [ 'nav-tab' ];
+
+					if ( ! empty( $language_link['is_current'] ) ) {
+						$classes[] = 'nav-tab-active';
+					}
+					?>
+					<a class="<?php echo esc_attr( implode( ' ', $classes ) ); ?>" href="<?php echo esc_url( (string) $language_link['url'] ); ?>">
+						<?php
+						echo esc_html( (string) $language_link['label'] );
+
+						if ( ! empty( $language_link['is_default'] ) ) {
+							echo ' ';
+							esc_html_e( '(Default)', 'nova-bridge-suite' );
+						}
+						?>
+					</a>
+				<?php endforeach; ?>
+			</h2>
+			<p class="description" style="margin-bottom:16px;">
+				<?php esc_html_e( 'Choose the language you want to edit before saving translatable settings on this screen.', 'nova-bridge-suite' ); ?>
+			</p>
+		<?php endif; ?>
 		<p><?php esc_html_e( 'Configure the NOVA Blog CPT layouts, author archives, and isolation rules for this site.', 'nova-bridge-suite' ); ?></p>
-			<form action="options.php" method="post">
+			<form action="<?php echo esc_url( $settings_form_action ); ?>" method="post">
 				<?php
 				settings_fields( 'quarantined_cpt_bodyclean' );
 				?>
+				<?php if ( '' !== $settings_form_language ) : ?>
+					<input type="hidden" name="lang" value="<?php echo esc_attr( $settings_form_language ); ?>" />
+				<?php endif; ?>
+				<?php if ( '' !== $settings_form_default_language ) : ?>
+					<input type="hidden" name="nova_bridge_suite_default_lang" value="<?php echo esc_attr( $settings_form_default_language ); ?>" />
+				<?php endif; ?>
 				<h2><?php esc_html_e( 'Author Archive', 'nova-bridge-suite' ); ?></h2>
 				<p><?php esc_html_e( 'Enable the plugin-provided author archive template if the theme does not supply one.', 'nova-bridge-suite' ); ?></p>
 					<table class="form-table" role="presentation">
@@ -7801,7 +7902,7 @@ final class Plugin {
 						<tr>
 							<th scope="row"><label for="quarantined-cpt-bodyclean-author-archive-title"><?php esc_html_e( 'Author Archive Title', 'nova-bridge-suite' ); ?></label></th>
 							<td>
-								<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-author-archive-title" name="<?php echo esc_attr( self::OPTION_AUTHOR_ARCHIVE_TITLE ); ?>" value="<?php echo esc_attr( $author_archive_name ); ?>" />
+								<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-author-archive-title" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_AUTHOR_ARCHIVE_TITLE ) ); ?>" value="<?php echo esc_attr( $author_archive_name ); ?>" />
 								<p class="description"><?php esc_html_e( 'Sets the heading and breadcrumb label for the author archive page.', 'nova-bridge-suite' ); ?></p>
 							</td>
 						</tr>
@@ -7936,14 +8037,14 @@ final class Plugin {
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-author"><?php esc_html_e( 'Author label', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-author" name="<?php echo esc_attr( self::OPTION_LABEL_AUTHOR ); ?>" value="<?php echo esc_attr( $label_author_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-author" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_AUTHOR ) ); ?>" value="<?php echo esc_attr( $label_author_override ); ?>" />
 										<p class="description"><?php esc_html_e( 'Text shown before the author name on single CPT pages.', 'nova-bridge-suite' ); ?></p>
 									</td>
 								</tr>
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-publications"><?php esc_html_e( 'Publications label', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-publications" name="<?php echo esc_attr( self::OPTION_LABEL_PUBLICATIONS ); ?>" value="<?php echo esc_attr( $label_publications_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-publications" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_PUBLICATIONS ) ); ?>" value="<?php echo esc_attr( $label_publications_override ); ?>" />
 										<p class="description">
 											<?php
 											/* translators: 1: publication count placeholder, 2: example localized string. */
@@ -7955,42 +8056,42 @@ final class Plugin {
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-key-takeaways"><?php esc_html_e( 'Key takeaways heading', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-key-takeaways" name="<?php echo esc_attr( self::OPTION_LABEL_KEY_TAKEAWAYS ); ?>" value="<?php echo esc_attr( $label_takeaways_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-key-takeaways" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_KEY_TAKEAWAYS ) ); ?>" value="<?php echo esc_attr( $label_takeaways_override ); ?>" />
 										<p class="description"><?php esc_html_e( 'Heading label used for the key takeaways panel on single blog pages.', 'nova-bridge-suite' ); ?></p>
 									</td>
 								</tr>
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-toc"><?php esc_html_e( 'Table of contents heading', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-toc" name="<?php echo esc_attr( self::OPTION_LABEL_TOC ); ?>" value="<?php echo esc_attr( $label_toc_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-toc" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_TOC ) ); ?>" value="<?php echo esc_attr( $label_toc_override ); ?>" />
 										<p class="description"><?php esc_html_e( 'Heading label used for the table of contents panel on single blog pages.', 'nova-bridge-suite' ); ?></p>
 									</td>
 								</tr>
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-toc-read-more"><?php esc_html_e( 'TOC read-more label', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-toc-read-more" name="<?php echo esc_attr( self::OPTION_LABEL_TOC_READ_MORE ); ?>" value="<?php echo esc_attr( $label_toc_read_more_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-toc-read-more" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_TOC_READ_MORE ) ); ?>" value="<?php echo esc_attr( $label_toc_read_more_override ); ?>" />
 										<p class="description"><?php esc_html_e( 'Label for the text link shown when the table of contents has more than 5 items. Clicking it expands the list in place.', 'nova-bridge-suite' ); ?></p>
 									</td>
 								</tr>
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-toc-read-less"><?php esc_html_e( 'TOC show-less label', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-toc-read-less" name="<?php echo esc_attr( self::OPTION_LABEL_TOC_READ_LESS ); ?>" value="<?php echo esc_attr( $label_toc_read_less_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-toc-read-less" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_TOC_READ_LESS ) ); ?>" value="<?php echo esc_attr( $label_toc_read_less_override ); ?>" />
 										<p class="description"><?php esc_html_e( 'Label shown after expansion so visitors can collapse the table of contents back to 5 items.', 'nova-bridge-suite' ); ?></p>
 									</td>
 								</tr>
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-related"><?php esc_html_e( 'Related articles heading', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-related" name="<?php echo esc_attr( self::OPTION_LABEL_RELATED_ARTICLES ); ?>" value="<?php echo esc_attr( $label_related_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-related" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_RELATED_ARTICLES ) ); ?>" value="<?php echo esc_attr( $label_related_override ); ?>" />
 										<p class="description"><?php esc_html_e( 'Heading label used for the related articles section on single blog pages.', 'nova-bridge-suite' ); ?></p>
 									</td>
 								</tr>
 								<tr>
 									<th scope="row"><label for="quarantined-cpt-bodyclean-label-faq"><?php esc_html_e( 'FAQ heading', 'nova-bridge-suite' ); ?></label></th>
 									<td>
-										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-faq" name="<?php echo esc_attr( self::OPTION_LABEL_FAQ_TITLE ); ?>" value="<?php echo esc_attr( $label_faq_override ); ?>" />
+										<input type="text" class="regular-text" id="quarantined-cpt-bodyclean-label-faq" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_FAQ_TITLE ) ); ?>" value="<?php echo esc_attr( $label_faq_override ); ?>" />
 										<p class="description"><?php esc_html_e( 'Heading label used for the frequently asked questions section on single blog pages.', 'nova-bridge-suite' ); ?></p>
 									</td>
 								</tr>
@@ -8091,48 +8192,48 @@ final class Plugin {
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-primary-title"><?php esc_html_e( 'Primary CTA title', 'nova-bridge-suite' ); ?></label></th>
 								<td>
-									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-primary-title" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_PRIMARY_TITLE ); ?>" value="<?php echo esc_attr( $primary_cta_global['title'] ); ?>" />
+									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-primary-title" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_PRIMARY_TITLE ) ); ?>" value="<?php echo esc_attr( $primary_cta_global['title'] ); ?>" />
 									<p class="description"><?php esc_html_e( 'Default title for the CTA between rich text block 1 and rich text block 2.', 'nova-bridge-suite' ); ?></p>
 								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-primary-copy"><?php esc_html_e( 'Primary CTA copy', 'nova-bridge-suite' ); ?></label></th>
 								<td>
-									<textarea class="large-text" rows="4" id="quarantined-cpt-global-cta-primary-copy" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_PRIMARY_COPY ); ?>"><?php echo esc_textarea( $primary_cta_global['copy'] ); ?></textarea>
+									<textarea class="large-text" rows="4" id="quarantined-cpt-global-cta-primary-copy" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_PRIMARY_COPY ) ); ?>"><?php echo esc_textarea( $primary_cta_global['copy'] ); ?></textarea>
 								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-primary-label"><?php esc_html_e( 'Primary CTA button label', 'nova-bridge-suite' ); ?></label></th>
-								<td><input type="text" class="regular-text" id="quarantined-cpt-global-cta-primary-label" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_PRIMARY_BUTTON_LABEL ); ?>" value="<?php echo esc_attr( $primary_cta_global['button_label'] ); ?>" /></td>
+								<td><input type="text" class="regular-text" id="quarantined-cpt-global-cta-primary-label" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_PRIMARY_BUTTON_LABEL ) ); ?>" value="<?php echo esc_attr( $primary_cta_global['button_label'] ); ?>" /></td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-primary-url"><?php esc_html_e( 'Primary CTA button URL', 'nova-bridge-suite' ); ?></label></th>
 								<td>
-									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-primary-url" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_PRIMARY_BUTTON_URL ); ?>" value="<?php echo esc_attr( $primary_cta_global['button_url'] ); ?>" />
+									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-primary-url" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_PRIMARY_BUTTON_URL ) ); ?>" value="<?php echo esc_attr( $primary_cta_global['button_url'] ); ?>" />
 									<p class="description"><?php esc_html_e( 'Supports internal links like /contact and absolute URLs like https://example.com/contact.', 'nova-bridge-suite' ); ?></p>
 								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-after-title"><?php esc_html_e( 'Second CTA title (Optional)', 'nova-bridge-suite' ); ?></label></th>
 								<td>
-									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-after-title" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_AFTER_RELATED_TITLE ); ?>" value="<?php echo esc_attr( $after_cta_global['title'] ); ?>" />
+									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-after-title" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_AFTER_RELATED_TITLE ) ); ?>" value="<?php echo esc_attr( $after_cta_global['title'] ); ?>" />
 									<p class="description"><?php esc_html_e( 'Default title for the second CTA shown after the related articles section.', 'nova-bridge-suite' ); ?></p>
 								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-after-copy"><?php esc_html_e( 'Second CTA copy (Optional)', 'nova-bridge-suite' ); ?></label></th>
 								<td>
-									<textarea class="large-text" rows="4" id="quarantined-cpt-global-cta-after-copy" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_AFTER_RELATED_COPY ); ?>"><?php echo esc_textarea( $after_cta_global['copy'] ); ?></textarea>
+									<textarea class="large-text" rows="4" id="quarantined-cpt-global-cta-after-copy" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_AFTER_RELATED_COPY ) ); ?>"><?php echo esc_textarea( $after_cta_global['copy'] ); ?></textarea>
 								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-after-label"><?php esc_html_e( 'Second CTA button label (Optional)', 'nova-bridge-suite' ); ?></label></th>
-								<td><input type="text" class="regular-text" id="quarantined-cpt-global-cta-after-label" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_AFTER_RELATED_BUTTON_LABEL ); ?>" value="<?php echo esc_attr( $after_cta_global['button_label'] ); ?>" /></td>
+								<td><input type="text" class="regular-text" id="quarantined-cpt-global-cta-after-label" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_AFTER_RELATED_BUTTON_LABEL ) ); ?>" value="<?php echo esc_attr( $after_cta_global['button_label'] ); ?>" /></td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="quarantined-cpt-global-cta-after-url"><?php esc_html_e( 'Second CTA button URL (Optional)', 'nova-bridge-suite' ); ?></label></th>
 								<td>
-									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-after-url" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_AFTER_RELATED_BUTTON_URL ); ?>" value="<?php echo esc_attr( $after_cta_global['button_url'] ); ?>" />
+									<input type="text" class="regular-text" id="quarantined-cpt-global-cta-after-url" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_AFTER_RELATED_BUTTON_URL ) ); ?>" value="<?php echo esc_attr( $after_cta_global['button_url'] ); ?>" />
 									<p class="description"><?php esc_html_e( 'Supports internal links like /contact and absolute URLs like https://example.com/contact.', 'nova-bridge-suite' ); ?></p>
 								</td>
 							</tr>
@@ -8315,36 +8416,36 @@ final class Plugin {
 											<table class="form-table quarantined-cpt-settings__nested-table" role="presentation">
 											<tr>
 												<th scope="row"><label for="quarantined-cpt-primary-title-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Primary CTA title', 'nova-bridge-suite' ); ?></label></th>
-												<td><input type="text" class="regular-text" id="quarantined-cpt-primary-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][title]" value="<?php echo esc_attr( (string) ( $tab_primary_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['title'] ); ?>" /></td>
+												<td><input type="text" class="regular-text" id="quarantined-cpt-primary-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][title]" value="<?php echo esc_attr( (string) ( $tab_primary_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['title'] ); ?>" /></td>
 											</tr>
 											<tr>
 												<th scope="row"><label for="quarantined-cpt-primary-copy-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Primary CTA copy', 'nova-bridge-suite' ); ?></label></th>
-												<td><textarea class="large-text" rows="3" id="quarantined-cpt-primary-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][copy]"><?php echo esc_textarea( (string) ( $tab_primary_cta['copy'] ?? '' ) ); ?></textarea></td>
+												<td><textarea class="large-text" rows="3" id="quarantined-cpt-primary-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][copy]"><?php echo esc_textarea( (string) ( $tab_primary_cta['copy'] ?? '' ) ); ?></textarea></td>
 											</tr>
 											<tr>
 												<th scope="row"><label for="quarantined-cpt-primary-label-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Primary CTA button label', 'nova-bridge-suite' ); ?></label></th>
-												<td><input type="text" class="regular-text" id="quarantined-cpt-primary-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][button_label]" value="<?php echo esc_attr( (string) ( $tab_primary_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_label'] ); ?>" /></td>
+												<td><input type="text" class="regular-text" id="quarantined-cpt-primary-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][button_label]" value="<?php echo esc_attr( (string) ( $tab_primary_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_label'] ); ?>" /></td>
 											</tr>
 											<tr>
 												<th scope="row"><label for="quarantined-cpt-primary-url-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Primary CTA button URL', 'nova-bridge-suite' ); ?></label></th>
-												<td><input type="text" class="regular-text" id="quarantined-cpt-primary-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][button_url]" value="<?php echo esc_attr( (string) ( $tab_primary_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_url'] ); ?>" /></td>
+												<td><input type="text" class="regular-text" id="quarantined-cpt-primary-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][primary][button_url]" value="<?php echo esc_attr( (string) ( $tab_primary_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_url'] ); ?>" /></td>
 											</tr>
 											<tr>
 													<th scope="row"><label for="quarantined-cpt-after-title-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Second CTA title (Optional)', 'nova-bridge-suite' ); ?></label></th>
-												<td><input type="text" class="regular-text" id="quarantined-cpt-after-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][title]" value="<?php echo esc_attr( (string) ( $tab_after_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['title'] ); ?>" /></td>
+												<td><input type="text" class="regular-text" id="quarantined-cpt-after-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][title]" value="<?php echo esc_attr( (string) ( $tab_after_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['title'] ); ?>" /></td>
 											</tr>
 											<tr>
 													<th scope="row"><label for="quarantined-cpt-after-copy-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Second CTA copy (Optional)', 'nova-bridge-suite' ); ?></label></th>
-												<td><textarea class="large-text" rows="3" id="quarantined-cpt-after-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][copy]"><?php echo esc_textarea( (string) ( $tab_after_cta['copy'] ?? '' ) ); ?></textarea></td>
+												<td><textarea class="large-text" rows="3" id="quarantined-cpt-after-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][copy]"><?php echo esc_textarea( (string) ( $tab_after_cta['copy'] ?? '' ) ); ?></textarea></td>
 											</tr>
 											<tr>
 													<th scope="row"><label for="quarantined-cpt-after-label-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Second CTA button label (Optional)', 'nova-bridge-suite' ); ?></label></th>
-												<td><input type="text" class="regular-text" id="quarantined-cpt-after-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][button_label]" value="<?php echo esc_attr( (string) ( $tab_after_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_label'] ); ?>" /></td>
+												<td><input type="text" class="regular-text" id="quarantined-cpt-after-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][button_label]" value="<?php echo esc_attr( (string) ( $tab_after_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_label'] ); ?>" /></td>
 											</tr>
 											<tr>
 													<th scope="row"><label for="quarantined-cpt-after-url-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'Second CTA button URL (Optional)', 'nova-bridge-suite' ); ?></label></th>
 												<td>
-													<input type="text" class="regular-text" id="quarantined-cpt-after-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_BLOG_CTA_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][button_url]" value="<?php echo esc_attr( (string) ( $tab_after_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_url'] ); ?>" />
+													<input type="text" class="regular-text" id="quarantined-cpt-after-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_BLOG_CTA_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][after_related][button_url]" value="<?php echo esc_attr( (string) ( $tab_after_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_url'] ); ?>" />
 													<p class="description"><?php esc_html_e( 'Supports internal links like /contact and absolute URLs like https://example.com/contact.', 'nova-bridge-suite' ); ?></p>
 												</td>
 											</tr>
@@ -8363,7 +8464,7 @@ final class Plugin {
 															$tab_archive_intro,
 															'quarantined_cpt_archive_intro_' . $tab_slug,
 															[
-																'textarea_name' => self::OPTION_ARCHIVE_BY_CPT . '[' . $tab_slug . '][intro]',
+																'textarea_name' => $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) . '[' . $tab_slug . '][intro]',
 																'textarea_rows' => 5,
 																'media_buttons' => false,
 																'teeny'         => true,
@@ -8386,7 +8487,7 @@ final class Plugin {
 															type="number"
 															class="small-text"
 															id="quarantined-cpt-archive-posts-per-page-<?php echo esc_attr( $tab_slug ); ?>"
-															name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][posts_per_page]"
+															name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][posts_per_page]"
 															value="<?php echo esc_attr( $tab_archive_posts_per_page ); ?>"
 															min="1"
 															max="200"
@@ -8407,8 +8508,8 @@ final class Plugin {
 													<th scope="row"><?php esc_html_e( 'CTA Above Posts (Optional)', 'nova-bridge-suite' ); ?></th>
 													<td>
 														<label for="quarantined-cpt-archive-cta-before-disabled-<?php echo esc_attr( $tab_slug ); ?>">
-															<input type="hidden" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before_disabled]" value="0" />
-															<input type="checkbox" id="quarantined-cpt-archive-cta-before-disabled-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before_disabled]" value="1" <?php checked( $tab_archive_before_disabled ); ?> />
+															<input type="hidden" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before_disabled]" value="0" />
+															<input type="checkbox" id="quarantined-cpt-archive-cta-before-disabled-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before_disabled]" value="1" <?php checked( $tab_archive_before_disabled ); ?> />
 															<?php esc_html_e( 'Disable CTA above posts for this CPT', 'nova-bridge-suite' ); ?>
 														</label>
 														<p class="description"><?php esc_html_e( 'When checked, this CTA is hidden even if global defaults are configured. Default: disabled.', 'nova-bridge-suite' ); ?></p>
@@ -8416,20 +8517,20 @@ final class Plugin {
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-before-title-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA above posts title (Optional)', 'nova-bridge-suite' ); ?></label></th>
-													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-before-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][title]" value="<?php echo esc_attr( (string) ( $tab_archive_before_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['title'] ); ?>" /></td>
+													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-before-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][title]" value="<?php echo esc_attr( (string) ( $tab_archive_before_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['title'] ); ?>" /></td>
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-before-copy-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA above posts copy (Optional)', 'nova-bridge-suite' ); ?></label></th>
-													<td><textarea class="large-text" rows="3" id="quarantined-cpt-archive-cta-before-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][copy]"><?php echo esc_textarea( (string) ( $tab_archive_before_cta['copy'] ?? '' ) ); ?></textarea></td>
+													<td><textarea class="large-text" rows="3" id="quarantined-cpt-archive-cta-before-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][copy]"><?php echo esc_textarea( (string) ( $tab_archive_before_cta['copy'] ?? '' ) ); ?></textarea></td>
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-before-label-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA above posts button label (Optional)', 'nova-bridge-suite' ); ?></label></th>
-													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-before-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][button_label]" value="<?php echo esc_attr( (string) ( $tab_archive_before_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_label'] ); ?>" /></td>
+													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-before-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][button_label]" value="<?php echo esc_attr( (string) ( $tab_archive_before_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_label'] ); ?>" /></td>
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-before-url-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA above posts button URL (Optional)', 'nova-bridge-suite' ); ?></label></th>
 													<td>
-														<input type="text" class="regular-text" id="quarantined-cpt-archive-cta-before-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][button_url]" value="<?php echo esc_attr( (string) ( $tab_archive_before_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_url'] ); ?>" />
+														<input type="text" class="regular-text" id="quarantined-cpt-archive-cta-before-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_before][button_url]" value="<?php echo esc_attr( (string) ( $tab_archive_before_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $primary_cta_global['button_url'] ); ?>" />
 														<p class="description"><?php esc_html_e( 'Supports internal links like /contact and absolute URLs like https://example.com/contact.', 'nova-bridge-suite' ); ?></p>
 													</td>
 												</tr>
@@ -8437,8 +8538,8 @@ final class Plugin {
 													<th scope="row"><?php esc_html_e( 'CTA Below Posts (Optional)', 'nova-bridge-suite' ); ?></th>
 													<td>
 														<label for="quarantined-cpt-archive-cta-after-disabled-<?php echo esc_attr( $tab_slug ); ?>">
-															<input type="hidden" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after_disabled]" value="0" />
-															<input type="checkbox" id="quarantined-cpt-archive-cta-after-disabled-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after_disabled]" value="1" <?php checked( $tab_archive_after_disabled ); ?> />
+															<input type="hidden" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after_disabled]" value="0" />
+															<input type="checkbox" id="quarantined-cpt-archive-cta-after-disabled-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after_disabled]" value="1" <?php checked( $tab_archive_after_disabled ); ?> />
 															<?php esc_html_e( 'Disable CTA below posts for this CPT', 'nova-bridge-suite' ); ?>
 														</label>
 														<p class="description"><?php esc_html_e( 'When checked, this CTA is hidden even if global defaults are configured.', 'nova-bridge-suite' ); ?></p>
@@ -8446,20 +8547,20 @@ final class Plugin {
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-after-title-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA below posts title (Optional)', 'nova-bridge-suite' ); ?></label></th>
-													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-after-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][title]" value="<?php echo esc_attr( (string) ( $tab_archive_after_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['title'] ); ?>" /></td>
+													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-after-title-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][title]" value="<?php echo esc_attr( (string) ( $tab_archive_after_cta['title'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['title'] ); ?>" /></td>
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-after-copy-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA below posts copy (Optional)', 'nova-bridge-suite' ); ?></label></th>
-													<td><textarea class="large-text" rows="3" id="quarantined-cpt-archive-cta-after-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][copy]"><?php echo esc_textarea( (string) ( $tab_archive_after_cta['copy'] ?? '' ) ); ?></textarea></td>
+													<td><textarea class="large-text" rows="3" id="quarantined-cpt-archive-cta-after-copy-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][copy]"><?php echo esc_textarea( (string) ( $tab_archive_after_cta['copy'] ?? '' ) ); ?></textarea></td>
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-after-label-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA below posts button label (Optional)', 'nova-bridge-suite' ); ?></label></th>
-													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-after-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][button_label]" value="<?php echo esc_attr( (string) ( $tab_archive_after_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_label'] ); ?>" /></td>
+													<td><input type="text" class="regular-text" id="quarantined-cpt-archive-cta-after-label-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][button_label]" value="<?php echo esc_attr( (string) ( $tab_archive_after_cta['button_label'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_label'] ); ?>" /></td>
 												</tr>
 												<tr>
 													<th scope="row"><label for="quarantined-cpt-archive-cta-after-url-<?php echo esc_attr( $tab_slug ); ?>"><?php esc_html_e( 'CTA below posts button URL (Optional)', 'nova-bridge-suite' ); ?></label></th>
 													<td>
-														<input type="text" class="regular-text" id="quarantined-cpt-archive-cta-after-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( self::OPTION_ARCHIVE_BY_CPT ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][button_url]" value="<?php echo esc_attr( (string) ( $tab_archive_after_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_url'] ); ?>" />
+														<input type="text" class="regular-text" id="quarantined-cpt-archive-cta-after-url-<?php echo esc_attr( $tab_slug ); ?>" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) ); ?>[<?php echo esc_attr( $tab_slug ); ?>][cta_after][button_url]" value="<?php echo esc_attr( (string) ( $tab_archive_after_cta['button_url'] ?? '' ) ); ?>" placeholder="<?php echo esc_attr( (string) $after_cta_global['button_url'] ); ?>" />
 														<p class="description"><?php esc_html_e( 'Supports internal links like /contact and absolute URLs like https://example.com/contact.', 'nova-bridge-suite' ); ?></p>
 													</td>
 												</tr>
@@ -8471,7 +8572,7 @@ final class Plugin {
 															$tab_archive_bottom,
 															'quarantined_cpt_archive_bottom_' . $tab_slug,
 															[
-																'textarea_name' => self::OPTION_ARCHIVE_BY_CPT . '[' . $tab_slug . '][content_after_cta]',
+																'textarea_name' => $this->get_settings_option_name( self::OPTION_ARCHIVE_BY_CPT ) . '[' . $tab_slug . '][content_after_cta]',
 																'textarea_rows' => 5,
 																'media_buttons' => false,
 																'teeny'         => true,

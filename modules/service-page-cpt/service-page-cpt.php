@@ -142,6 +142,59 @@ final class Plugin {
 		'faq'        => 'FAQ',
 		'related'    => 'Related articles',
 	];
+	private const LOCALIZED_SETTINGS_OPTIONS = [
+		self::OPTION_SINGULAR,
+		self::OPTION_PLURAL,
+		self::OPTION_LABEL_FAQ,
+		self::OPTION_LABEL_RELATED,
+		self::OPTION_GLOBAL_HERO_PRIMARY_LABEL,
+		self::OPTION_GLOBAL_HERO_PRIMARY_URL,
+		self::OPTION_GLOBAL_HERO_SECONDARY_LABEL,
+		self::OPTION_GLOBAL_HERO_SECONDARY_URL,
+		self::OPTION_GLOBAL_SIDEBAR_TITLE,
+		self::OPTION_GLOBAL_SIDEBAR_COPY,
+		self::OPTION_GLOBAL_SIDEBAR_PRIMARY_LABEL,
+		self::OPTION_GLOBAL_SIDEBAR_PRIMARY_URL,
+		self::OPTION_GLOBAL_SIDEBAR_SECONDARY_LABEL,
+		self::OPTION_GLOBAL_SIDEBAR_SECONDARY_URL,
+		self::OPTION_GLOBAL_CTA_TITLE,
+		self::OPTION_GLOBAL_CTA_BULLET_1,
+		self::OPTION_GLOBAL_CTA_BULLET_2,
+		self::OPTION_GLOBAL_CTA_BULLET_3,
+		self::OPTION_GLOBAL_CTA_BUTTON_LABEL,
+		self::OPTION_GLOBAL_CTA_BUTTON_URL,
+		self::OPTION_GLOBAL_CTA_MORE_TEXT,
+		self::OPTION_GLOBAL_CTA_MORE_URL,
+		self::OPTION_ARCHIVE_HERO_EYEBROW,
+		self::OPTION_ARCHIVE_HERO_TITLE,
+		self::OPTION_ARCHIVE_HERO_COPY,
+		self::OPTION_ARCHIVE_HERO_CTA_LABEL,
+		self::OPTION_ARCHIVE_HERO_CTA_URL,
+		self::OPTION_ARCHIVE_INTRO_HEADING,
+		self::OPTION_ARCHIVE_INTRO_COPY,
+		self::OPTION_ARCHIVE_CARD_CTA_LABEL,
+		self::OPTION_ARCHIVE_CARD_PLACEHOLDER,
+		self::OPTION_ARCHIVE_SERVICES_MODE,
+		self::OPTION_ARCHIVE_SERVICES_LIMIT,
+		self::OPTION_ARCHIVE_SERVICES_IDS,
+		self::OPTION_ARCHIVE_HIGHLIGHTS_HEADING,
+		self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE,
+		self::OPTION_ARCHIVE_HIGHLIGHT_ONE_COPY,
+		self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE,
+		self::OPTION_ARCHIVE_HIGHLIGHT_TWO_COPY,
+		self::OPTION_ARCHIVE_CTA_TITLE,
+		self::OPTION_ARCHIVE_CTA_BULLET_1,
+		self::OPTION_ARCHIVE_CTA_BULLET_2,
+		self::OPTION_ARCHIVE_CTA_BULLET_3,
+		self::OPTION_ARCHIVE_CTA_BUTTON_LABEL,
+		self::OPTION_ARCHIVE_CTA_BUTTON_URL,
+		self::OPTION_ARCHIVE_CTA_MORE_TEXT,
+		self::OPTION_ARCHIVE_CTA_MORE_URL,
+		self::OPTION_ARCHIVE_FAQ,
+		self::OPTION_ARCHIVE_RELATED_POSTS,
+		self::OPTION_ARCHIVE_SEO_TITLE,
+		self::OPTION_ARCHIVE_SEO_DESCRIPTION,
+	];
 
 	/**
 	 * Singleton instance.
@@ -362,6 +415,10 @@ final class Plugin {
 		return '' === $slug ? self::BASE_SLUG : $slug;
 	}
 
+	private function get_settings_option_name( string $option ): string {
+		return \Nova_Bridge_Suite_WPML_Support::get_localized_option_name( $option );
+	}
+
 	private function get_singular_name(): string {
 		$default = __( 'Service Page', 'nova-bridge-suite' );
 		$value   = \sanitize_text_field( (string) \get_option( self::OPTION_SINGULAR, $default ) );
@@ -471,14 +528,16 @@ final class Plugin {
 
 	private function get_archive_service_ids(): array {
 		$value = \get_option( self::OPTION_ARCHIVE_SERVICES_IDS, [] );
+		$ids   = self::sanitize_post_ids( $value );
 
-		return self::sanitize_post_ids( $value );
+		return \Nova_Bridge_Suite_WPML_Support::maybe_translate_post_ids( $ids, self::CPT );
 	}
 
 	private function get_archive_related_post_ids(): array {
 		$value = \get_option( self::OPTION_ARCHIVE_RELATED_POSTS, [] );
+		$ids   = self::sanitize_post_ids( $value );
 
-		return self::sanitize_post_ids( $value );
+		return \Nova_Bridge_Suite_WPML_Support::maybe_translate_post_ids( $ids, 'post' );
 	}
 
 	private function get_archive_faq_items(): array {
@@ -4782,6 +4841,11 @@ final class Plugin {
 		\register_setting( 'service-cpt', self::OPTION_ARCHIVE_SEO_DESCRIPTION, [
 			'sanitize_callback' => 'sanitize_textarea_field',
 		] );
+
+		\Nova_Bridge_Suite_WPML_Support::register_localized_settings(
+			'service-cpt',
+			self::LOCALIZED_SETTINGS_OPTIONS
+		);
 	}
 
 	private function get_color_presets(): array {
@@ -4968,6 +5032,13 @@ final class Plugin {
 	}
 
 	public function render_settings_page(): void {
+		$settings_language_context = \Nova_Bridge_Suite_WPML_Support::get_settings_language_context();
+		$settings_language_links   = \Nova_Bridge_Suite_WPML_Support::get_settings_language_links(
+			\admin_url( 'options-general.php?page=service-cpt' )
+		);
+		$settings_form_action      = \Nova_Bridge_Suite_WPML_Support::get_settings_form_action_url();
+		$settings_form_language    = (string) ( $settings_language_context['current'] ?? '' );
+		$settings_form_default_language = (string) ( $settings_language_context['default'] ?? '' );
 		$templates  = $this->get_templates();
 		$selected_template = $this->get_selected_template_slug();
 		$missing_required = $this->collect_missing_plugins( self::REQUIRED_PLUGINS );
@@ -5106,6 +5177,47 @@ final class Plugin {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'NOVA Services Settings', 'nova-bridge-suite' ); ?></h1>
+			<?php if ( ! empty( $settings_language_context ) ) : ?>
+				<div class="notice notice-info inline">
+					<p>
+						<?php
+						printf(
+							/* translators: 1: multilingual plugin name, 2: current language code, 3: default language code. */
+							esc_html__( '%1$s is active. Text, CTA, archive, and related-content settings on this screen save for the current language (%2$s) and fall back to the default language (%3$s) until overridden. Slugs, template choice, styling, and layout controls stay global and only save on the default language tab.', 'nova-bridge-suite' ),
+							esc_html( (string) ( $settings_language_context['provider'] ?? 'Multilingual' ) ),
+							esc_html( strtoupper( (string) ( $settings_language_context['current'] ?? '' ) ) ),
+							esc_html( strtoupper( (string) ( $settings_language_context['default'] ?? '' ) ) )
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+			<?php if ( ! empty( $settings_language_links ) ) : ?>
+				<h2 class="nav-tab-wrapper" style="margin-bottom:12px;">
+					<?php foreach ( $settings_language_links as $language_link ) : ?>
+						<?php
+						$classes = [ 'nav-tab' ];
+
+						if ( ! empty( $language_link['is_current'] ) ) {
+							$classes[] = 'nav-tab-active';
+						}
+						?>
+						<a class="<?php echo esc_attr( implode( ' ', $classes ) ); ?>" href="<?php echo esc_url( (string) $language_link['url'] ); ?>">
+							<?php
+							echo esc_html( (string) $language_link['label'] );
+
+							if ( ! empty( $language_link['is_default'] ) ) {
+								echo ' ';
+								esc_html_e( '(Default)', 'nova-bridge-suite' );
+							}
+							?>
+						</a>
+					<?php endforeach; ?>
+				</h2>
+				<p class="description" style="margin-bottom:16px;">
+					<?php esc_html_e( 'Choose the language you want to edit before saving translatable settings on this screen.', 'nova-bridge-suite' ); ?>
+				</p>
+			<?php endif; ?>
 			<?php if ( ! empty( $missing_required ) ) : ?>
 				<div class="notice notice-warning inline">
 					<p><?php esc_html_e( 'This screen is locked until the required plugins are installed and active.', 'nova-bridge-suite' ); ?></p>
@@ -5124,8 +5236,14 @@ final class Plugin {
 				</div>
 				<?php return; ?>
 			<?php endif; ?>
-			<form method="post" action="options.php">
+			<form method="post" action="<?php echo esc_url( $settings_form_action ); ?>">
 				<?php \settings_fields( 'service-cpt' ); ?>
+				<?php if ( '' !== $settings_form_language ) : ?>
+					<input type="hidden" name="lang" value="<?php echo esc_attr( $settings_form_language ); ?>" />
+				<?php endif; ?>
+				<?php if ( '' !== $settings_form_default_language ) : ?>
+					<input type="hidden" name="nova_bridge_suite_default_lang" value="<?php echo esc_attr( $settings_form_default_language ); ?>" />
+				<?php endif; ?>
 
 				<details class="service-cpt-panel" open>
 					<summary><?php esc_html_e( 'General', 'nova-bridge-suite' ); ?></summary>
@@ -5139,11 +5257,11 @@ final class Plugin {
 						</tr>
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Singular label', 'nova-bridge-suite' ); ?></th>
-							<td><input type="text" name="<?php echo esc_attr( self::OPTION_SINGULAR ); ?>" value="<?php echo esc_attr( $this->get_singular_name() ); ?>" class="regular-text" /></td>
+							<td><input type="text" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_SINGULAR ) ); ?>" value="<?php echo esc_attr( $this->get_singular_name() ); ?>" class="regular-text" /></td>
 						</tr>
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Plural label', 'nova-bridge-suite' ); ?></th>
-							<td><input type="text" name="<?php echo esc_attr( self::OPTION_PLURAL ); ?>" value="<?php echo esc_attr( $this->get_plural_name() ); ?>" class="regular-text" /></td>
+							<td><input type="text" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_PLURAL ) ); ?>" value="<?php echo esc_attr( $this->get_plural_name() ); ?>" class="regular-text" /></td>
 						</tr>
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Default template', 'nova-bridge-suite' ); ?></th>
@@ -5161,14 +5279,14 @@ final class Plugin {
 						<tr>
 							<th scope="row"><?php esc_html_e( 'FAQ heading label (H3)', 'nova-bridge-suite' ); ?></th>
 							<td>
-								<input type="text" name="<?php echo esc_attr( self::OPTION_LABEL_FAQ ); ?>" value="<?php echo esc_attr( $faq_label ); ?>" class="regular-text" />
+								<input type="text" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_FAQ ) ); ?>" value="<?php echo esc_attr( $faq_label ); ?>" class="regular-text" />
 								<p class="description"><?php esc_html_e( 'Shown as the FAQ section heading in the templates.', 'nova-bridge-suite' ); ?></p>
 							</td>
 						</tr>
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Related articles label (H3)', 'nova-bridge-suite' ); ?></th>
 							<td>
-								<input type="text" name="<?php echo esc_attr( self::OPTION_LABEL_RELATED ); ?>" value="<?php echo esc_attr( $related_label ); ?>" class="regular-text" />
+								<input type="text" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_RELATED ) ); ?>" value="<?php echo esc_attr( $related_label ); ?>" class="regular-text" />
 								<p class="description"><?php esc_html_e( 'Shown as the Related Articles heading in the templates.', 'nova-bridge-suite' ); ?></p>
 							</td>
 						</tr>
@@ -5331,7 +5449,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Primary CTA label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_HERO_PRIMARY_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_HERO_PRIMARY_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $global_hero['primary_label'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5340,7 +5458,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Primary CTA URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_HERO_PRIMARY_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_HERO_PRIMARY_URL ) ); ?>"
 								value="<?php echo esc_attr( $global_hero['primary_url'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5349,7 +5467,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Secondary CTA label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_HERO_SECONDARY_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_HERO_SECONDARY_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $global_hero['secondary_label'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5358,7 +5476,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Secondary CTA URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_HERO_SECONDARY_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_HERO_SECONDARY_URL ) ); ?>"
 								value="<?php echo esc_attr( $global_hero['secondary_url'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5371,7 +5489,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Title', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_SIDEBAR_TITLE ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_TITLE ) ); ?>"
 								value="<?php echo esc_attr( $global_sidebar['title'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5379,7 +5497,7 @@ final class Plugin {
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Copy', 'nova-bridge-suite' ); ?></span>
 							<textarea
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_SIDEBAR_COPY ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_COPY ) ); ?>"
 								class="large-text"
 								rows="3"
 							><?php echo esc_textarea( $global_sidebar['copy'] ?? '' ); ?></textarea>
@@ -5388,7 +5506,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Primary CTA label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_SIDEBAR_PRIMARY_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_PRIMARY_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $global_sidebar['primary_label'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5397,7 +5515,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Primary CTA URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_SIDEBAR_PRIMARY_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_PRIMARY_URL ) ); ?>"
 								value="<?php echo esc_attr( $global_sidebar['primary_url'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5406,7 +5524,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Secondary CTA label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_SIDEBAR_SECONDARY_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_SECONDARY_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $global_sidebar['secondary_label'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5415,7 +5533,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Secondary CTA URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_SIDEBAR_SECONDARY_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_SECONDARY_URL ) ); ?>"
 								value="<?php echo esc_attr( $global_sidebar['secondary_url'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5428,7 +5546,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Title', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_TITLE ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_TITLE ) ); ?>"
 								value="<?php echo esc_attr( $global_wide['title'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5437,7 +5555,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Bullet 1', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_BULLET_1 ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_BULLET_1 ) ); ?>"
 								value="<?php echo esc_attr( $global_wide_bullet_1 ); ?>"
 								class="regular-text"
 							/>
@@ -5446,7 +5564,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Bullet 2', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_BULLET_2 ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_BULLET_2 ) ); ?>"
 								value="<?php echo esc_attr( $global_wide_bullet_2 ); ?>"
 								class="regular-text"
 							/>
@@ -5455,7 +5573,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Bullet 3', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_BULLET_3 ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_BULLET_3 ) ); ?>"
 								value="<?php echo esc_attr( $global_wide_bullet_3 ); ?>"
 								class="regular-text"
 							/>
@@ -5464,7 +5582,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Button label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_BUTTON_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_BUTTON_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $global_wide['button_label'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5473,7 +5591,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Button URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_BUTTON_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_BUTTON_URL ) ); ?>"
 								value="<?php echo esc_attr( $global_wide['button_url'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5482,7 +5600,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'More text', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_MORE_TEXT ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_MORE_TEXT ) ); ?>"
 								value="<?php echo esc_attr( $global_wide['more_text'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5491,7 +5609,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'More URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_GLOBAL_CTA_MORE_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_CTA_MORE_URL ) ); ?>"
 								value="<?php echo esc_attr( $global_wide['more_url'] ?? '' ); ?>"
 								class="regular-text"
 							/>
@@ -5509,7 +5627,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Eyebrow', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_HERO_EYEBROW ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HERO_EYEBROW ) ); ?>"
 								value="<?php echo esc_attr( $archive_hero_eyebrow ); ?>"
 								class="regular-text"
 							/>
@@ -5517,7 +5635,7 @@ final class Plugin {
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Heading (H1)', 'nova-bridge-suite' ); ?></span>
 							<textarea
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_HERO_TITLE ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HERO_TITLE ) ); ?>"
 								class="large-text"
 								rows="2"
 							><?php echo esc_textarea( $archive_hero_title ); ?></textarea>
@@ -5530,7 +5648,7 @@ final class Plugin {
 								$archive_hero_copy,
 								'service_cpt_archive_hero_copy',
 								[
-									'textarea_name' => self::OPTION_ARCHIVE_HERO_COPY,
+									'textarea_name' => $this->get_settings_option_name( self::OPTION_ARCHIVE_HERO_COPY ),
 									'textarea_rows' => 4,
 									'editor_class'  => 'service-cpt-archive-editor',
 									'media_buttons' => false,
@@ -5550,7 +5668,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'CTA label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_HERO_CTA_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HERO_CTA_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $archive_hero_cta_label ); ?>"
 								class="regular-text"
 							/>
@@ -5559,7 +5677,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'CTA URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_HERO_CTA_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HERO_CTA_URL ) ); ?>"
 								value="<?php echo esc_attr( $archive_hero_cta_url ); ?>"
 								class="regular-text"
 							/>
@@ -5573,7 +5691,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Heading (H2)', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_INTRO_HEADING ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_INTRO_HEADING ) ); ?>"
 								value="<?php echo esc_attr( $archive_intro_heading ); ?>"
 								class="regular-text"
 							/>
@@ -5585,7 +5703,7 @@ final class Plugin {
 								$archive_intro_copy,
 								'service_cpt_archive_intro_copy',
 								[
-									'textarea_name' => self::OPTION_ARCHIVE_INTRO_COPY,
+									'textarea_name' => $this->get_settings_option_name( self::OPTION_ARCHIVE_INTRO_COPY ),
 									'textarea_rows' => 5,
 									'editor_class'  => 'service-cpt-archive-editor',
 									'media_buttons' => false,
@@ -5609,7 +5727,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Meta title', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_SEO_TITLE ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_SEO_TITLE ) ); ?>"
 								value="<?php echo esc_attr( $archive_seo_title ); ?>"
 								class="large-text"
 							/>
@@ -5617,7 +5735,7 @@ final class Plugin {
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Meta description', 'nova-bridge-suite' ); ?></span>
 							<textarea
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_SEO_DESCRIPTION ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_SEO_DESCRIPTION ) ); ?>"
 								class="large-text"
 								rows="3"
 							><?php echo esc_textarea( $archive_seo_description ); ?></textarea>
@@ -5630,23 +5748,23 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Card CTA label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CARD_CTA_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CARD_CTA_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $archive_card_cta_label ); ?>"
 								class="regular-text"
 							/>
 						</div>
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Card image placeholder', 'nova-bridge-suite' ); ?></span>
-							<input type="hidden" name="<?php echo esc_attr( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ); ?>" value="<?php echo esc_attr( (int) $archive_card_placeholder['id'] ); ?>" />
+							<input type="hidden" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ) ); ?>" value="<?php echo esc_attr( (int) $archive_card_placeholder['id'] ); ?>" />
 							<div id="service_cpt_archive_card_placeholder_preview" class="service-cpt-image-preview <?php echo $archive_card_placeholder['url'] ? 'has-image' : 'is-empty'; ?>">
 								<img src="<?php echo esc_url( $archive_card_placeholder['url'] ); ?>" alt="" />
 								<span class="service-cpt-image-placeholder"><?php esc_html_e( 'No image selected', 'nova-bridge-suite' ); ?></span>
 								<button
 									type="button"
 									class="service-cpt-media-remove service-cpt-image-remove"
-									data-target="<?php echo esc_attr( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ); ?>"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ) ); ?>"
 									data-preview="#service_cpt_archive_card_placeholder_preview"
-									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ); ?>']"
+									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ) ); ?>']"
 									aria-label="<?php esc_attr_e( 'Remove placeholder image', 'nova-bridge-suite' ); ?>"
 									<?php disabled( ! $archive_card_placeholder['id'] ); ?>
 								>
@@ -5657,7 +5775,7 @@ final class Plugin {
 								<button
 									type="button"
 									class="button service-cpt-media-button"
-									data-target="<?php echo esc_attr( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ); ?>"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CARD_PLACEHOLDER ) ); ?>"
 									data-preview="#service_cpt_archive_card_placeholder_preview"
 									data-select-label="<?php echo esc_attr__( 'Select placeholder', 'nova-bridge-suite' ); ?>"
 									data-change-label="<?php echo esc_attr__( 'Change placeholder', 'nova-bridge-suite' ); ?>"
@@ -5669,7 +5787,7 @@ final class Plugin {
 						</div>
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Service selection', 'nova-bridge-suite' ); ?></span>
-							<select name="<?php echo esc_attr( self::OPTION_ARCHIVE_SERVICES_MODE ); ?>" id="service-cpt-archive-service-mode">
+							<select name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_SERVICES_MODE ) ); ?>" id="service-cpt-archive-service-mode">
 								<option value="auto" <?php selected( $archive_service_mode, 'auto' ); ?>><?php esc_html_e( 'All services (automatic)', 'nova-bridge-suite' ); ?></option>
 								<option value="manual" <?php selected( $archive_service_mode, 'manual' ); ?>><?php esc_html_e( 'Manual selection', 'nova-bridge-suite' ); ?></option>
 							</select>
@@ -5678,7 +5796,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Max services', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="number"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_SERVICES_LIMIT ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_SERVICES_LIMIT ) ); ?>"
 								value="<?php echo esc_attr( $archive_service_limit ); ?>"
 								class="small-text"
 								min="0"
@@ -5692,7 +5810,7 @@ final class Plugin {
 									<ul
 										class="service-cpt-archive-list service-cpt-archive-selected"
 										data-service-cpt-selected
-										data-input-name="<?php echo esc_attr( self::OPTION_ARCHIVE_SERVICES_IDS ); ?>[]"
+										data-input-name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_SERVICES_IDS ) ); ?>[]"
 									>
 										<li class="service-cpt-empty" data-service-cpt-empty><?php esc_html_e( 'No services selected yet.', 'nova-bridge-suite' ); ?></li>
 										<?php foreach ( $archive_selected_services as $service ) : ?>
@@ -5709,7 +5827,7 @@ final class Plugin {
 													<button type="button" class="button button-small service-cpt-move-down"><?php esc_html_e( 'Down', 'nova-bridge-suite' ); ?></button>
 													<button type="button" class="button button-small service-cpt-remove-service"><?php esc_html_e( 'Remove', 'nova-bridge-suite' ); ?></button>
 												</div>
-												<input type="hidden" name="<?php echo esc_attr( self::OPTION_ARCHIVE_SERVICES_IDS ); ?>[]" value="<?php echo esc_attr( (string) $service['id'] ); ?>" />
+												<input type="hidden" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_SERVICES_IDS ) ); ?>[]" value="<?php echo esc_attr( (string) $service['id'] ); ?>" />
 											</li>
 										<?php endforeach; ?>
 									</ul>
@@ -5756,7 +5874,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Heading (H2)', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHTS_HEADING ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHTS_HEADING ) ); ?>"
 								value="<?php echo esc_attr( $archive_highlights_heading ); ?>"
 								class="regular-text"
 							/>
@@ -5768,7 +5886,7 @@ final class Plugin {
 								$archive_highlight_one_copy,
 								'service_cpt_archive_highlight_one_copy',
 								[
-									'textarea_name' => self::OPTION_ARCHIVE_HIGHLIGHT_ONE_COPY,
+									'textarea_name' => $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_COPY ),
 									'textarea_rows' => 4,
 									'editor_class'  => 'service-cpt-archive-editor',
 									'media_buttons' => false,
@@ -5786,16 +5904,16 @@ final class Plugin {
 						</div>
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Highlight 1 image', 'nova-bridge-suite' ); ?></span>
-							<input type="hidden" name="<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ); ?>" value="<?php echo esc_attr( (int) $archive_highlight_one_media['id'] ); ?>" />
+							<input type="hidden" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ) ); ?>" value="<?php echo esc_attr( (int) $archive_highlight_one_media['id'] ); ?>" />
 							<div id="service_cpt_archive_highlight_one_preview" class="service-cpt-image-preview <?php echo $archive_highlight_one_media['url'] ? 'has-image' : 'is-empty'; ?>">
 								<img src="<?php echo esc_url( $archive_highlight_one_media['url'] ); ?>" alt="" />
 								<span class="service-cpt-image-placeholder"><?php esc_html_e( 'No image selected', 'nova-bridge-suite' ); ?></span>
 								<button
 									type="button"
 									class="service-cpt-media-remove service-cpt-image-remove"
-									data-target="<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ); ?>"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ) ); ?>"
 									data-preview="#service_cpt_archive_highlight_one_preview"
-									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ); ?>']"
+									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ) ); ?>']"
 									aria-label="<?php esc_attr_e( 'Remove highlight image 1', 'nova-bridge-suite' ); ?>"
 									<?php disabled( ! $archive_highlight_one_media['id'] ); ?>
 								>
@@ -5806,7 +5924,7 @@ final class Plugin {
 								<button
 									type="button"
 									class="button service-cpt-media-button"
-									data-target="<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ); ?>"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_ONE_IMAGE ) ); ?>"
 									data-preview="#service_cpt_archive_highlight_one_preview"
 									data-select-label="<?php echo esc_attr__( 'Select image 1', 'nova-bridge-suite' ); ?>"
 									data-change-label="<?php echo esc_attr__( 'Change image 1', 'nova-bridge-suite' ); ?>"
@@ -5822,7 +5940,7 @@ final class Plugin {
 								$archive_highlight_two_copy,
 								'service_cpt_archive_highlight_two_copy',
 								[
-									'textarea_name' => self::OPTION_ARCHIVE_HIGHLIGHT_TWO_COPY,
+									'textarea_name' => $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_COPY ),
 									'textarea_rows' => 4,
 									'editor_class'  => 'service-cpt-archive-editor',
 									'media_buttons' => false,
@@ -5840,16 +5958,16 @@ final class Plugin {
 						</div>
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Highlight 2 image', 'nova-bridge-suite' ); ?></span>
-							<input type="hidden" name="<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ); ?>" value="<?php echo esc_attr( (int) $archive_highlight_two_media['id'] ); ?>" />
+							<input type="hidden" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ) ); ?>" value="<?php echo esc_attr( (int) $archive_highlight_two_media['id'] ); ?>" />
 							<div id="service_cpt_archive_highlight_two_preview" class="service-cpt-image-preview <?php echo $archive_highlight_two_media['url'] ? 'has-image' : 'is-empty'; ?>">
 								<img src="<?php echo esc_url( $archive_highlight_two_media['url'] ); ?>" alt="" />
 								<span class="service-cpt-image-placeholder"><?php esc_html_e( 'No image selected', 'nova-bridge-suite' ); ?></span>
 								<button
 									type="button"
 									class="service-cpt-media-remove service-cpt-image-remove"
-									data-target="<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ); ?>"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ) ); ?>"
 									data-preview="#service_cpt_archive_highlight_two_preview"
-									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ); ?>']"
+									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ) ); ?>']"
 									aria-label="<?php esc_attr_e( 'Remove highlight image 2', 'nova-bridge-suite' ); ?>"
 									<?php disabled( ! $archive_highlight_two_media['id'] ); ?>
 								>
@@ -5860,7 +5978,7 @@ final class Plugin {
 								<button
 									type="button"
 									class="button service-cpt-media-button"
-									data-target="<?php echo esc_attr( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ); ?>"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_HIGHLIGHT_TWO_IMAGE ) ); ?>"
 									data-preview="#service_cpt_archive_highlight_two_preview"
 									data-select-label="<?php echo esc_attr__( 'Select image 2', 'nova-bridge-suite' ); ?>"
 									data-change-label="<?php echo esc_attr__( 'Change image 2', 'nova-bridge-suite' ); ?>"
@@ -5878,7 +5996,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Title', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_TITLE ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_TITLE ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_title ); ?>"
 								class="regular-text"
 							/>
@@ -5887,7 +6005,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Bullet 1', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_BULLET_1 ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_BULLET_1 ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_bullet_1 ); ?>"
 								class="regular-text"
 							/>
@@ -5896,7 +6014,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Bullet 2', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_BULLET_2 ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_BULLET_2 ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_bullet_2 ); ?>"
 								class="regular-text"
 							/>
@@ -5905,7 +6023,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Bullet 3', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_BULLET_3 ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_BULLET_3 ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_bullet_3 ); ?>"
 								class="regular-text"
 							/>
@@ -5914,7 +6032,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Button label', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_BUTTON_LABEL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_BUTTON_LABEL ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_button_label ); ?>"
 								class="regular-text"
 							/>
@@ -5923,7 +6041,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Button URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_BUTTON_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_BUTTON_URL ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_button_url ); ?>"
 								class="regular-text"
 							/>
@@ -5932,7 +6050,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'More text', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="text"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_MORE_TEXT ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_MORE_TEXT ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_more_text ); ?>"
 								class="regular-text"
 							/>
@@ -5941,7 +6059,7 @@ final class Plugin {
 							<span class="service-cpt-field-label"><?php esc_html_e( 'More URL', 'nova-bridge-suite' ); ?></span>
 							<input
 								type="url"
-								name="<?php echo esc_attr( self::OPTION_ARCHIVE_CTA_MORE_URL ); ?>"
+								name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_CTA_MORE_URL ) ); ?>"
 								value="<?php echo esc_attr( $archive_cta_more_url ); ?>"
 								class="regular-text"
 							/>
@@ -5971,7 +6089,7 @@ final class Plugin {
 								<span class="service-cpt-field-label"><?php echo esc_html( sprintf( __( 'FAQ %d question', 'nova-bridge-suite' ), $i + 1 ) ); ?></span>
 								<input
 									type="text"
-									name="<?php echo esc_attr( self::OPTION_ARCHIVE_FAQ ); ?>[<?php echo esc_attr( $i ); ?>][question]"
+									name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_FAQ ) ); ?>[<?php echo esc_attr( $i ); ?>][question]"
 									value="<?php echo esc_attr( $question ); ?>"
 									class="regular-text"
 								/>
@@ -5984,7 +6102,7 @@ final class Plugin {
 									$answer,
 									$editor_id,
 									[
-										'textarea_name' => self::OPTION_ARCHIVE_FAQ . '[' . $i . '][answer]',
+										'textarea_name' => $this->get_settings_option_name( self::OPTION_ARCHIVE_FAQ ) . '[' . $i . '][answer]',
 										'textarea_rows' => 3,
 										'editor_class'  => 'service-cpt-archive-editor',
 										'media_buttons' => false,
@@ -6022,7 +6140,7 @@ final class Plugin {
 									<label class="service-cpt-related-item" data-related-item data-related-title="<?php echo esc_attr( strtolower( (string) $title ) ); ?>">
 										<input
 											type="checkbox"
-											name="<?php echo esc_attr( self::OPTION_ARCHIVE_RELATED_POSTS ); ?>[]"
+											name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_ARCHIVE_RELATED_POSTS ) ); ?>[]"
 											value="<?php echo esc_attr( $post_id ); ?>"
 											<?php checked( $is_checked ); ?>
 										/>
