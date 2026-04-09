@@ -4,7 +4,7 @@
 - Requires at least: 6.0
 - Tested up to: 6.9
 - Requires PHP: 7.4
-- Stable tag: 2.3.11
+- Stable tag: 2.4.1
 - License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -46,6 +46,12 @@ No. It works alongside builders like Avada, Elementor, WPBakery, and more. NOVA 
 Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is active you can also enable the optional rich text field module for category pages - in case your category page template still needs this.
 
 ## Changelog
+
+### 2.4.1
+
+- Add first-class WPML and Polylang support for the Blog and Service CPT modules via plugin-shipped multilingual config plus runtime hooks for dynamic Blog CPT slugs.
+- Register renamed/custom Blog CPT slugs with both multilingual plugins at runtime so translated entries stay available when the blog post type slug is customized.
+- Resolve Blog and Service related post IDs and Service attachment IDs through the active multilingual plugin so translated entries point to translated content instead of the source language.
 
 ### 2.3.11
 

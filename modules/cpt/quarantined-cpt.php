@@ -5507,6 +5507,7 @@ final class Plugin {
 			? self::sanitize_blog_related_posts( $meta[ self::META_BLOG_RELATED_POSTS ] )
 			: [];
 
+		$related_ids = \Nova_Bridge_Suite_WPML_Support::maybe_translate_post_ids( $related_ids );
 		$related_ids = array_values(
 			array_filter(
 				$related_ids,

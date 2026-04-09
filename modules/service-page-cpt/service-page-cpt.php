@@ -1726,7 +1726,10 @@ final class Plugin {
 		$ids = array_map( 'absint', $ids );
 		$ids = array_filter( $ids );
 
-		return array_values( array_unique( $ids ) );
+		return \Nova_Bridge_Suite_WPML_Support::maybe_translate_post_ids(
+			array_values( array_unique( $ids ) ),
+			'post'
+		);
 	}
 
 	private function render_related_posts_block( array $post_ids, array $attributes ): string {
@@ -4486,6 +4489,7 @@ final class Plugin {
 			];
 		}
 
+		$attachment_id = \Nova_Bridge_Suite_WPML_Support::maybe_translate_attachment_id( $attachment_id );
 		$src = \wp_get_attachment_image_src( $attachment_id, 'large' );
 		$alt = \get_post_meta( $attachment_id, '_wp_attachment_image_alt', true );
 
@@ -7604,7 +7608,10 @@ final class Plugin {
 				],
 			],
 			'faq'        => $meta['sp_faq'],
-			'related_posts' => $meta['sp_related_posts'],
+			'related_posts' => \Nova_Bridge_Suite_WPML_Support::maybe_translate_post_ids(
+				\is_array( $meta['sp_related_posts'] ) ? $meta['sp_related_posts'] : [],
+				'post'
+			),
 		];
 
 		if ( ! $has_hero ) {
