@@ -705,7 +705,7 @@ final class Plugin {
 		add_filter( 'enter_title_here', [ $this, 'update_title_placeholder' ], 10, 2 );
 		add_filter( 'use_block_editor_for_post_type', [ $this, 'force_classic_editor' ], 100, 2 );
 		add_filter( 'gutenberg_can_edit_post_type', [ $this, 'force_classic_editor' ], 100, 2 );
-		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_assets' ], 100 );
 		add_action( 'wp_head', [ $this, 'output_author_schema' ], 5 );
 		add_action( 'wp_head', [ $this, 'output_article_schema' ], 6 );
 		add_action( 'wp_head', [ $this, 'output_author_breadcrumb_schema' ], 7 );
@@ -2282,6 +2282,12 @@ final class Plugin {
 			$inline_css .= "\n" . 'body.quarantined-cpt-view,body.quarantined-cpt-archive,body.quarantined-cpt-author,.quarantined-cpt{'
 				. implode( ';', $style_declarations )
 				. ';}';
+		}
+
+		$style_override_rules = $this->build_blog_style_override_rules( $style_settings );
+
+		if ( '' !== $style_override_rules ) {
+			$inline_css .= "\n" . $style_override_rules;
 		}
 
 		$custom_rules = $this->build_custom_exclusion_rules();
@@ -10088,6 +10094,256 @@ final class Plugin {
 		);
 
 		return apply_filters( 'quarantined_cpt_bodyclean/custom_exclude_selectors', array_values( $lines ) );
+	}
+
+	/**
+	 * Builds explicit frontend override rules for filled blog design settings.
+	 *
+	 * These rules intentionally only render when a setting has an effective value,
+	 * so Theme Native can continue inheriting theme defaults for untouched fields.
+	 *
+	 * @param array<string,string> $style_settings Effective blog style settings.
+	 * @return string
+	 */
+	private function build_blog_style_override_rules( array $style_settings ): string {
+		$rules = [];
+
+		$text_color = trim( (string) ( $style_settings['text_color'] ?? '' ) );
+
+		if ( '' !== $text_color ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt,',
+					'.quarantined-cpt .quarantined-cpt__title,',
+					'.quarantined-cpt .quarantined-cpt__description,',
+					'.quarantined-cpt .quarantined-cpt__archive-intro,',
+					'.quarantined-cpt .quarantined-cpt__meta,',
+					'.quarantined-cpt .quarantined-cpt__meta-row,',
+					'.quarantined-cpt .quarantined-cpt__author-chip-text,',
+					'.quarantined-cpt .quarantined-cpt__intro,',
+					'.quarantined-cpt .quarantined-cpt__content,',
+					'.quarantined-cpt .quarantined-cpt__content h1,',
+					'.quarantined-cpt .quarantined-cpt__content h2,',
+					'.quarantined-cpt .quarantined-cpt__content h3,',
+					'.quarantined-cpt .quarantined-cpt__content h4,',
+					'.quarantined-cpt .quarantined-cpt__content h5,',
+					'.quarantined-cpt .quarantined-cpt__content h6,',
+					'.quarantined-cpt .quarantined-cpt__content p,',
+					'.quarantined-cpt .quarantined-cpt__content li,',
+					'.quarantined-cpt .quarantined-cpt__content blockquote,',
+					'.quarantined-cpt .quarantined-cpt__content figcaption,',
+					'.quarantined-cpt .quarantined-cpt__panel,',
+					'.quarantined-cpt .quarantined-cpt__panel-title,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-title,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-copy,',
+					'.quarantined-cpt .quarantined-cpt__faq-title,',
+					'.quarantined-cpt .quarantined-cpt__faq-item,',
+					'.quarantined-cpt .quarantined-cpt__faq-item summary,',
+					'.quarantined-cpt .quarantined-cpt__faq-answer,',
+					'.quarantined-cpt .quarantined-cpt__related-title,',
+					'.quarantined-cpt .quarantined-cpt__card,',
+					'.quarantined-cpt .quarantined-cpt__card-title,',
+					'.quarantined-cpt .quarantined-cpt__card-summary,',
+					'.quarantined-cpt .quarantined-cpt__card-meta,',
+					'.quarantined-cpt .quarantined-cpt__author-box,',
+					'.quarantined-cpt .quarantined-cpt__author-box-name,',
+					'.quarantined-cpt .quarantined-cpt__author-box-role,',
+					'.quarantined-cpt .quarantined-cpt__author-box-description,',
+					'.quarantined-cpt .quarantined-cpt__author-role,',
+					'.quarantined-cpt .quarantined-cpt__author-location,',
+					'.quarantined-cpt .quarantined-cpt__author-description,',
+					'.quarantined-cpt .quarantined-cpt__empty {',
+					"\tcolor: var(--quarantined-cpt-text-color) !important;",
+					'}',
+				]
+			);
+		}
+
+		$link_color = trim( (string) ( $style_settings['link_color'] ?? '' ) );
+
+		if ( '' !== $link_color ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt .quarantined-cpt__description a,',
+					'.quarantined-cpt .quarantined-cpt__archive-intro a,',
+					'.quarantined-cpt .quarantined-cpt__meta a,',
+					'.quarantined-cpt .quarantined-cpt__crumb a,',
+					'.quarantined-cpt .quarantined-cpt__author-chip-text a,',
+					'.quarantined-cpt .quarantined-cpt__content a,',
+					'.quarantined-cpt .quarantined-cpt__panel a,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-copy a,',
+					'.quarantined-cpt .quarantined-cpt__author-box-description a,',
+					'.quarantined-cpt .quarantined-cpt__card-title a,',
+					'.quarantined-cpt .quarantined-cpt__author-role a,',
+					'.quarantined-cpt .quarantined-cpt__author-location a,',
+					'.quarantined-cpt .quarantined-cpt__author-box-name a {',
+					"\tcolor: var(--quarantined-cpt-link-color) !important;",
+					'}',
+				]
+			);
+		}
+
+		$link_hover_color = trim( (string) ( $style_settings['link_hover_color'] ?? '' ) );
+
+		if ( '' !== $link_hover_color ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt .quarantined-cpt__description a:hover,',
+					'.quarantined-cpt .quarantined-cpt__description a:focus,',
+					'.quarantined-cpt .quarantined-cpt__archive-intro a:hover,',
+					'.quarantined-cpt .quarantined-cpt__archive-intro a:focus,',
+					'.quarantined-cpt .quarantined-cpt__meta a:hover,',
+					'.quarantined-cpt .quarantined-cpt__meta a:focus,',
+					'.quarantined-cpt .quarantined-cpt__crumb a:hover,',
+					'.quarantined-cpt .quarantined-cpt__crumb a:focus,',
+					'.quarantined-cpt .quarantined-cpt__author-chip-text a:hover,',
+					'.quarantined-cpt .quarantined-cpt__author-chip-text a:focus,',
+					'.quarantined-cpt .quarantined-cpt__content a:hover,',
+					'.quarantined-cpt .quarantined-cpt__content a:focus,',
+					'.quarantined-cpt .quarantined-cpt__panel a:hover,',
+					'.quarantined-cpt .quarantined-cpt__panel a:focus,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-copy a:hover,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-copy a:focus,',
+					'.quarantined-cpt .quarantined-cpt__author-box-description a:hover,',
+					'.quarantined-cpt .quarantined-cpt__author-box-description a:focus,',
+					'.quarantined-cpt .quarantined-cpt__card-title a:hover,',
+					'.quarantined-cpt .quarantined-cpt__card-title a:focus,',
+					'.quarantined-cpt .quarantined-cpt__author-role a:hover,',
+					'.quarantined-cpt .quarantined-cpt__author-role a:focus,',
+					'.quarantined-cpt .quarantined-cpt__author-location a:hover,',
+					'.quarantined-cpt .quarantined-cpt__author-location a:focus,',
+					'.quarantined-cpt .quarantined-cpt__author-box-name a:hover,',
+					'.quarantined-cpt .quarantined-cpt__author-box-name a:focus {',
+					"\tcolor: var(--quarantined-cpt-link-hover-color) !important;",
+					'}',
+				]
+			);
+		}
+
+		$content_max_width = trim( (string) ( $style_settings['content_max_width'] ?? '' ) );
+
+		if ( '' !== $content_max_width ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__entry--article{\n\tmax-width: var(--quarantined-cpt-entry-max-width) !important;\n}";
+		}
+
+		$panel_background = trim( (string) ( $style_settings['panel_background'] ?? '' ) );
+
+		if ( '' !== $panel_background ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt .quarantined-cpt__panel,',
+					'.quarantined-cpt .quarantined-cpt__faq-item {',
+					"\tbackground-color: var(--quarantined-cpt-panel-background) !important;",
+					'}',
+				]
+			);
+		}
+
+		$panel_border = trim( (string) ( $style_settings['panel_border'] ?? '' ) );
+
+		if ( '' !== $panel_border ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt .quarantined-cpt__panel,',
+					'.quarantined-cpt .quarantined-cpt__faq-item {',
+					"\tborder-color: var(--quarantined-cpt-panel-border-color) !important;",
+					'}',
+				]
+			);
+		}
+
+		$meta_border = trim( (string) ( $style_settings['meta_border'] ?? '' ) );
+
+		if ( '' !== $meta_border ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__meta-row{\n\tborder-bottom-color: var(--quarantined-cpt-meta-divider-color) !important;\n}";
+		}
+
+		$share_background = trim( (string) ( $style_settings['share_background'] ?? '' ) );
+
+		if ( '' !== $share_background ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt .quarantined-cpt__share-link,',
+					'.quarantined-cpt .quarantined-cpt__author-social a {',
+					"\tbackground-color: var(--quarantined-cpt-social-background, var(--quarantined-cpt-share-bg)) !important;",
+					'}',
+				]
+			);
+		}
+
+		$share_border = trim( (string) ( $style_settings['share_border'] ?? '' ) );
+
+		if ( '' !== $share_border ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__share-link{\n\tborder-color: var(--quarantined-cpt-share-border) !important;\n}";
+		}
+
+		$cta_background = trim( (string) ( $style_settings['cta_background'] ?? '' ) );
+
+		if ( '' !== $cta_background ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__wide-cta{\n\tbackground-color: var(--quarantined-cpt-cta-bg) !important;\n}";
+		}
+
+		$cta_button_background = trim( (string) ( $style_settings['cta_button_background'] ?? '' ) );
+
+		if ( '' !== $cta_button_background ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__wide-cta-button{\n\tbackground-color: var(--quarantined-cpt-cta-button-bg) !important;\n}";
+		}
+
+		$cta_button_text = trim( (string) ( $style_settings['cta_button_text'] ?? '' ) );
+
+		if ( '' !== $cta_button_text ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt .quarantined-cpt__wide-cta-button,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-button:hover,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-button:focus {',
+					"\tcolor: var(--quarantined-cpt-cta-button-text) !important;",
+					'}',
+				]
+			);
+		}
+
+		$cta_button_hover = trim( (string) ( $style_settings['cta_button_hover'] ?? '' ) );
+
+		if ( '' !== $cta_button_hover ) {
+			$rules[] = implode(
+				"\n",
+				[
+					'.quarantined-cpt .quarantined-cpt__wide-cta-button:hover,',
+					'.quarantined-cpt .quarantined-cpt__wide-cta-button:focus {',
+					"\tbackground-color: var(--quarantined-cpt-cta-button-hover-bg) !important;",
+					'}',
+				]
+			);
+		}
+
+		$author_box_background = trim( (string) ( $style_settings['author_box_background'] ?? '' ) );
+
+		if ( '' !== $author_box_background ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__author-box{\n\tbackground-color: var(--quarantined-cpt-author-box-bg) !important;\n}";
+		}
+
+		$author_box_border = trim( (string) ( $style_settings['author_box_border'] ?? '' ) );
+
+		if ( '' !== $author_box_border ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__author-box{\n\tborder-color: var(--quarantined-cpt-author-box-border) !important;\n}";
+		}
+
+		$card_radius = trim( (string) ( $style_settings['card_radius'] ?? '' ) );
+
+		if ( '' !== $card_radius ) {
+			$rules[] = ".quarantined-cpt .quarantined-cpt__card{\n\tborder-radius: var(--quarantined-cpt-card-radius) !important;\n}";
+		}
+
+		return implode( "\n", $rules );
 	}
 
 	/**

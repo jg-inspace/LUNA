@@ -4,7 +4,7 @@
 - Requires at least: 6.0
 - Tested up to: 6.9
 - Requires PHP: 7.4
-- Stable tag: 2.4.1
+- Stable tag: 2.4.2
 - License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -46,6 +46,11 @@ No. It works alongside builders like Avada, Elementor, WPBakery, and more. NOVA 
 Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is active you can also enable the optional rich text field module for category pages - in case your category page template still needs this.
 
 ## Changelog
+
+### 2.4.2
+
+- Make Blog CPT design settings apply reliably on the frontend by enqueueing the module stylesheet after theme and kit styles.
+- Add explicit frontend override rules for filled Blog CPT design fields so per-CPT values correctly override the global blog style settings.
 
 ### 2.4.1
 

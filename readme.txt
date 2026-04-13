@@ -4,7 +4,7 @@ Tags: seo, automation, content, rest-api, page builder
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.4.1
+Stable tag: 2.4.2
 License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -41,6 +41,10 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 1. NOVA Settings screen with module toggles.
 
 == Changelog ==
+= 2.4.2 =
+* Make Blog CPT design settings apply reliably on the frontend by enqueueing the module stylesheet after theme and kit styles.
+* Add explicit frontend override rules for filled Blog CPT design fields so per-CPT values correctly override the global blog style settings.
+
 = 2.4.1 =
 * Add first-class WPML and Polylang support for the Blog and Service CPT modules via plugin-shipped multilingual config plus runtime hooks for dynamic Blog CPT slugs.
 * Register renamed/custom Blog CPT slugs with both multilingual plugins at runtime so translations remain available when the blog post type slug is customized.
