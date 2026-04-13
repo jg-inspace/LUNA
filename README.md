@@ -51,6 +51,7 @@ Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is ac
 
 - Make Blog CPT design settings apply reliably on the frontend by enqueueing the module stylesheet after theme and kit styles.
 - Add explicit frontend override rules for filled Blog CPT design fields so per-CPT values correctly override the global blog style settings.
+- Point the bundled plugin update checker at `InSpace-GEO/NOVA-Bridge-Suite` so WordPress update checks follow the new release source.
 
 ### 2.4.1
 

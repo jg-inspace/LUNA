@@ -44,7 +44,7 @@ if ( file_exists( NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'plugin-update-checker/plugin-u
     require_once NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'plugin-update-checker/plugin-update-checker.php';
 
     $nova_bridge_suite_update_checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-        'https://github.com/jg-inspace/LUNA/',
+        'https://github.com/InSpace-GEO/NOVA-Bridge-Suite/',
         __FILE__,
         'nova-bridge-suite'
     );

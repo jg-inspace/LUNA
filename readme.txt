@@ -44,6 +44,7 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 = 2.4.2 =
 * Make Blog CPT design settings apply reliably on the frontend by enqueueing the module stylesheet after theme and kit styles.
 * Add explicit frontend override rules for filled Blog CPT design fields so per-CPT values correctly override the global blog style settings.
+* Point the bundled plugin update checker at `InSpace-GEO/NOVA-Bridge-Suite` so WordPress update checks follow the new release source.
 
 = 2.4.1 =
 * Add first-class WPML and Polylang support for the Blog and Service CPT modules via plugin-shipped multilingual config plus runtime hooks for dynamic Blog CPT slugs.
