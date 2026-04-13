@@ -793,6 +793,7 @@ final class Plugin {
 				'labels'             => $labels,
 				'public'             => true,
 				'has_archive'        => $base_slug,
+				'hierarchical'       => true,
 				'publicly_queryable' => true,
 				'show_ui'            => true,
 				'show_in_menu'       => true,
@@ -800,10 +801,11 @@ final class Plugin {
 				'rest_base'          => $rest_base,
 				'menu_position'      => 22,
 				'menu_icon'          => plugin_dir_url( __FILE__ ) . 'assets/quarantined-cpt-rocket.svg',
-				'supports'           => [ 'title', 'author', 'thumbnail', 'revisions' ],
+				'supports'           => [ 'title', 'author', 'thumbnail', 'revisions', 'page-attributes' ],
 				'rewrite'            => [
-					'slug'       => $base_slug,
-					'with_front' => false,
+					'slug'         => $base_slug,
+					'with_front'   => false,
+					'hierarchical' => true,
 				],
 			];
 
@@ -5105,9 +5107,9 @@ final class Plugin {
 			]
 		);
 
-			register_rest_route(
-				'nova-blog/v1',
-				'/post/by-slug/(?P<slug>[a-zA-Z0-9_-]+)',
+		register_rest_route(
+			'nova-blog/v1',
+			'/post/by-slug/(?P<slug>[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*)',
 			[
 				'methods'             => 'GET',
 				'callback'            => [ $this, 'rest_get_blog_post_by_slug' ],
@@ -5116,7 +5118,7 @@ final class Plugin {
 					'slug'      => [
 						'type'              => 'string',
 						'required'          => true,
-						'sanitize_callback' => 'sanitize_title',
+						'sanitize_callback' => [ $this, 'sanitize_rest_slug_path' ],
 					],
 					'post_type' => [
 						'type'              => 'string',
@@ -5126,6 +5128,16 @@ final class Plugin {
 				],
 			]
 		);
+	}
+
+	/**
+	 * Sanitizes a slash-delimited slug path for REST requests.
+	 *
+	 * @param mixed $value Raw request value.
+	 * @return string
+	 */
+	public function sanitize_rest_slug_path( $value ): string {
+		return $this->sanitize_slug_path( (string) $value );
 	}
 
 	/**
@@ -5200,7 +5212,7 @@ final class Plugin {
 			return null;
 		}
 
-		$slug = sanitize_title( (string) $request->get_param( 'slug' ) );
+		$slug = $this->sanitize_slug_path( (string) $request->get_param( 'slug' ) );
 
 		if ( '' === $slug ) {
 			return null;
@@ -5249,6 +5261,8 @@ final class Plugin {
 			'id'                => (int) $post->ID,
 			'post_type'         => $post_type,
 			'slug'              => (string) $post->post_name,
+			'path'              => $this->get_post_slug_path( $post ),
+			'parent_id'         => (int) $post->post_parent,
 			'meta'              => $meta,
 			'meta_descriptions' => $this->get_blog_ai_meta_descriptions( $allowed_meta_keys ),
 			'meta_note'         => $this->get_blog_ai_meta_note( $allowed_meta_keys ),
@@ -5262,6 +5276,65 @@ final class Plugin {
 		$payload['editable_fields'] = array_values( $editable_fields );
 
 		return $payload;
+	}
+
+	/**
+	 * Sanitizes a slash-delimited slug path while preserving hierarchy.
+	 *
+	 * @param string $path Raw slug or slug path.
+	 * @return string
+	 */
+	private function sanitize_slug_path( string $path ): string {
+		$path = trim( $path, '/' );
+
+		if ( '' === $path ) {
+			return '';
+		}
+
+		$segments = array_filter(
+			array_map( 'sanitize_title', explode( '/', $path ) ),
+			static function ( $segment ): bool {
+				return '' !== $segment;
+			}
+		);
+
+		return implode( '/', $segments );
+	}
+
+	/**
+	 * Returns a slash-delimited slug path for hierarchical post types.
+	 *
+	 * @param \WP_Post $post Post instance.
+	 * @return string
+	 */
+	private function get_post_slug_path( \WP_Post $post ): string {
+		$type_object = get_post_type_object( $post->post_type );
+
+		if ( $type_object && ! empty( $type_object->hierarchical ) ) {
+			$segments  = [];
+			$ancestors = array_reverse( get_post_ancestors( $post ) );
+
+			foreach ( $ancestors as $ancestor_id ) {
+				$ancestor = get_post( $ancestor_id );
+
+				if ( ! ( $ancestor instanceof \WP_Post ) || $ancestor->post_type !== $post->post_type || '' === $ancestor->post_name ) {
+					continue;
+				}
+
+				$segments[] = (string) $ancestor->post_name;
+			}
+
+			if ( '' !== $post->post_name ) {
+				$segments[] = (string) $post->post_name;
+			}
+
+			$path = implode( '/', $segments );
+			if ( '' !== $path ) {
+				return $path;
+			}
+		}
+
+		return (string) $post->post_name;
 	}
 
 	/**
@@ -6167,6 +6240,7 @@ final class Plugin {
 					$type,
 					$slug,
 					$slug,
+					'parents-on',
 				]
 			);
 		}
@@ -6323,15 +6397,22 @@ final class Plugin {
 				return $query_vars;
 			}
 
-			$slug = sanitize_title( $second );
+			$relative_path = $this->sanitize_slug_path( implode( '/', array_slice( $segments, 1 ) ) );
 
-			if ( '' === $slug ) {
+			if ( '' === $relative_path ) {
+				continue;
+			}
+
+			$matched_post = get_page_by_path( $relative_path, OBJECT, $post_type );
+
+			if ( ! ( $matched_post instanceof \WP_Post ) || $post_type !== (string) $matched_post->post_type ) {
 				continue;
 			}
 
 			unset( $query_vars['pagename'] );
 			$query_vars['post_type'] = $post_type;
-			$query_vars['name']      = $slug;
+			$query_vars['p']         = (int) $matched_post->ID;
+			$query_vars['name']      = (string) $matched_post->post_name;
 
 			return $query_vars;
 		}
@@ -6869,6 +6950,29 @@ final class Plugin {
 				'label' => $post_type->labels->name,
 				'url'   => $link ?: '',
 			];
+		}
+
+		if ( $post_type && ! empty( $post_type->hierarchical ) ) {
+			$ancestor_ids = array_reverse( get_post_ancestors( $post ) );
+
+			foreach ( $ancestor_ids as $ancestor_id ) {
+				$ancestor = get_post( $ancestor_id );
+
+				if ( ! ( $ancestor instanceof \WP_Post ) || $ancestor->post_type !== $post->post_type ) {
+					continue;
+				}
+
+				$ancestor_title = get_the_title( $ancestor );
+
+				if ( '' === trim( $ancestor_title ) ) {
+					continue;
+				}
+
+				$crumbs[] = [
+					'label' => $ancestor_title,
+					'url'   => get_permalink( $ancestor ) ?: '',
+				];
+			}
 		}
 
 		$crumbs[] = [

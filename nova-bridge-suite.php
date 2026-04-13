@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NOVA Bridge Suite
  * Description: Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
- * Version: 2.4.2
+ * Version: 2.4.3
  * Author: LUNA B.V.
  * Requires PHP: 7.4
  * License: Proprietary
@@ -13,10 +13,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'NOVA_BRIDGE_SUITE_VERSION', '2.4.2' );
+define( 'NOVA_BRIDGE_SUITE_VERSION', '2.4.3' );
 define( 'NOVA_BRIDGE_SUITE_PLUGIN_FILE', __FILE__ );
 define( 'NOVA_BRIDGE_SUITE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'NOVA_BRIDGE_SUITE_OPTION', 'nova_bridge_settings' );
+define( 'NOVA_BRIDGE_SUITE_VERSION_OPTION', 'nova_bridge_suite_version' );
 function nova_bridge_suite_normalize_server_globals(): void {
     if ( ! isset( $_SERVER['REQUEST_URI'] ) || ! is_string( $_SERVER['REQUEST_URI'] ) || '' === $_SERVER['REQUEST_URI'] ) {
         $_SERVER['REQUEST_URI'] = '/';
@@ -86,6 +87,7 @@ foreach ( $nova_bridge_suite_modules as $nova_bridge_suite_setting_key => $nova_
 
 register_activation_hook( __FILE__, 'nova_bridge_suite_activate' );
 register_deactivation_hook( __FILE__, 'nova_bridge_suite_deactivate' );
+add_action( 'init', 'nova_bridge_suite_maybe_upgrade', 99 );
 
 function nova_bridge_suite_activate(): void {
     $settings = nova_bridge_suite_get_settings();
@@ -95,6 +97,7 @@ function nova_bridge_suite_activate(): void {
 
     nova_bridge_suite_handle_cpt_toggle( false, ! empty( $settings['custom_post_types'] ) );
     nova_bridge_suite_handle_service_cpt_toggle( false, ! empty( $settings['service_page_cpt'] ) );
+    update_option( NOVA_BRIDGE_SUITE_VERSION_OPTION, NOVA_BRIDGE_SUITE_VERSION );
 }
 
 function nova_bridge_suite_deactivate(): void {
@@ -106,6 +109,17 @@ function nova_bridge_suite_deactivate(): void {
     if ( ! empty( $settings['service_page_cpt'] ) ) {
         nova_bridge_suite_handle_service_cpt_toggle( true, false );
     }
+}
+
+function nova_bridge_suite_maybe_upgrade(): void {
+    $installed_version = (string) get_option( NOVA_BRIDGE_SUITE_VERSION_OPTION, '' );
+
+    if ( NOVA_BRIDGE_SUITE_VERSION === $installed_version ) {
+        return;
+    }
+
+    flush_rewrite_rules( false );
+    update_option( NOVA_BRIDGE_SUITE_VERSION_OPTION, NOVA_BRIDGE_SUITE_VERSION );
 }
 
 add_action( 'update_option_' . NOVA_BRIDGE_SUITE_OPTION, 'nova_bridge_suite_settings_updated', 10, 3 );

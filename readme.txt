@@ -4,7 +4,7 @@ Tags: seo, automation, content, rest-api, page builder
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.4.2
+Stable tag: 2.4.3
 License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -41,6 +41,12 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 1. NOVA Settings screen with module toggles.
 
 == Changelog ==
+= 2.4.3 =
+* Enable parent and child relationships for the Blog CPT and Service Page CPT by registering both post types as hierarchical and exposing page attributes in the editor.
+* Resolve Blog CPT entries by hierarchical slug paths in the dedicated NOVA blog endpoint so child entries can be fetched with paths like `parent/child`.
+* Flush rewrite rules once after upgrading so nested Blog and Service URLs start resolving immediately on 2.4.3.
+* Render parent pages inside the Blog CPT fallback breadcrumb trail so child entries show `Archive > Parent > Child` instead of jumping straight from the archive to the current page.
+
 = 2.4.2 =
 * Make Blog CPT design settings apply reliably on the frontend by enqueueing the module stylesheet after theme and kit styles.
 * Add explicit frontend override rules for filled Blog CPT design fields so per-CPT values correctly override the global blog style settings.

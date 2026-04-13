@@ -354,6 +354,7 @@ final class Plugin {
 			'labels'             => $labels,
 			'public'             => true,
 			'has_archive'        => $base,
+			'hierarchical'       => true,
 			'publicly_queryable' => true,
 			'show_ui'            => true,
 			'show_in_menu'       => true,
@@ -361,10 +362,11 @@ final class Plugin {
 			'rest_base'          => $base,
 			'menu_position'      => 22,
 			'menu_icon'          => 'dashicons-screenoptions',
-			'supports'           => [ 'title', 'thumbnail', 'revisions', 'author' ],
+			'supports'           => [ 'title', 'thumbnail', 'revisions', 'author', 'page-attributes' ],
 			'rewrite'            => [
-				'slug'       => $base,
-				'with_front' => false,
+				'slug'         => $base,
+				'with_front'   => false,
+				'hierarchical' => true,
 			],
 		];
 
