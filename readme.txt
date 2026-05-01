@@ -45,6 +45,9 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 * Prevent recursive multilingual option resolution during REST create and update requests so WordPress mutations no longer trigger critical errors on multilingual sites.
 * Skip expensive `meta_all` and `meta_all_flat` expansion on non-GET REST responses by default to keep create and update responses lightweight and stable.
 * Avoid redundant Elementor cache clears during document finalization and stop clearing the global files cache unless a site explicitly opts in.
+* Invalidate Elementor editor snapshots and runtime cache meta after bridge document writes so Elementor 4 does not reopen stale rendered content as a single text widget.
+* Preserve and resolve Elementor document types like `wp-page` and `wp-post` instead of forcing all saved documents to the legacy `page` type.
+* Skip localized WPML/Polylang settings option shadowing during post save, trash, delete, and WP-CLI write flows to avoid recursive multilingual lookups during mutations.
 
 = 2.4.5 =
 * Prevent managed Blog CPT article slugs from being forced to `-2` when the only matching slug belongs to an uploaded attachment image.

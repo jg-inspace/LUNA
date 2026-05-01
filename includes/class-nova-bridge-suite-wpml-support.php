@@ -227,21 +227,81 @@ final class Nova_Bridge_Suite_WPML_Support {
 	}
 
 	/**
-	 * Skip localized option shadowing during REST mutations.
+	 * Skip localized option shadowing during write flows.
 	 *
 	 * Post and page mutations can trigger plugin and multilingual lookups while
 	 * WordPress is still inside the write flow. Keep localized option shadowing
-	 * for read requests, but avoid it on mutating REST requests so writes cannot
-	 * recurse back through language resolution.
+	 * for read requests and settings saves, but avoid it during post mutations
+	 * so writes cannot recurse back through language resolution.
 	 */
 	private static function should_register_option_localization_hooks(): bool {
-		if ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST ) {
-			return true;
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			return false;
+		}
+
+		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+			return self::is_read_request_method();
+		}
+
+		if ( self::is_admin_post_mutation_request() ) {
+			return false;
+		}
+
+		return true;
+	}
+
+	private static function is_read_request_method(): bool {
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
+
+		return in_array( $method, [ 'GET', 'HEAD', 'OPTIONS' ], true );
+	}
+
+	private static function is_admin_post_mutation_request(): bool {
+		if ( ! function_exists( 'is_admin' ) || ! is_admin() ) {
+			return false;
 		}
 
 		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
 
-		return in_array( $method, [ 'GET', 'HEAD', 'OPTIONS' ], true );
+		if ( in_array( $method, [ 'PUT', 'PATCH', 'DELETE' ], true ) ) {
+			return true;
+		}
+
+		if ( 'POST' === $method && ! self::is_localized_settings_save_request() ) {
+			return true;
+		}
+
+		$action = self::get_request_action();
+
+		return in_array(
+			$action,
+			[
+				'bulk_edit',
+				'delete',
+				'delete_all',
+				'editpost',
+				'inline-save',
+				'trash',
+				'untrash',
+			],
+			true
+		);
+	}
+
+	private static function get_request_action(): string {
+		foreach ( [ 'action', 'action2' ] as $key ) {
+			if ( empty( $_REQUEST[ $key ] ) || ! is_scalar( $_REQUEST[ $key ] ) ) {
+				continue;
+			}
+
+			$action = sanitize_key( wp_unslash( (string) $_REQUEST[ $key ] ) );
+
+			if ( '' !== $action && '-1' !== $action ) {
+				return $action;
+			}
+		}
+
+		return '';
 	}
 
 	/**

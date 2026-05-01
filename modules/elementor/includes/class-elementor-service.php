@@ -451,6 +451,7 @@ class Elementor_Service {
 		}
 
 		update_post_meta( $post_id, '_elementor_data', wp_slash( $raw_json ) );
+		$this->invalidate_elementor_derived_state( $post_id );
 
 		$page_settings = isset( $options['page_settings'] ) && is_array( $options['page_settings'] )
 			? $options['page_settings']
@@ -833,11 +834,96 @@ class Elementor_Service {
 	 */
 	private function sync_elementor_runtime_meta( $post_id ) {
 		update_post_meta( $post_id, '_elementor_edit_mode', 'builder' );
-		update_post_meta( $post_id, '_elementor_template_type', 'page' );
+		update_post_meta( $post_id, '_elementor_template_type', $this->resolve_elementor_template_type( $post_id ) );
 
 		if ( defined( 'ELEMENTOR_VERSION' ) ) {
 			update_post_meta( $post_id, '_elementor_version', ELEMENTOR_VERSION );
 		}
+	}
+
+	/**
+	 * Remove Elementor editor/runtime snapshots that are derived from _elementor_data.
+	 *
+	 * @param int $post_id Post ID.
+	 */
+	private function invalidate_elementor_derived_state( $post_id ) {
+		foreach ( array(
+			'_crdt_document',
+			'_elementor_element_cache',
+			'_elementor_page_assets',
+			'_elementor_css',
+		) as $meta_key ) {
+			delete_post_meta( $post_id, $meta_key );
+		}
+	}
+
+	/**
+	 * Resolve the Elementor document type without flattening pages to a legacy type.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return string
+	 */
+	private function resolve_elementor_template_type( $post_id ) {
+		$post_type = get_post_type( $post_id );
+
+		if ( class_exists( 'Elementor\\Plugin' ) ) {
+			try {
+				$plugin            = \Elementor\Plugin::instance();
+				$documents_manager = isset( $plugin->documents ) ? $plugin->documents : null;
+
+				if ( $documents_manager && method_exists( $documents_manager, 'get' ) ) {
+					$document = $documents_manager->get( $post_id );
+
+					if ( $document && method_exists( $document, 'get_name' ) ) {
+						$template_type = $this->normalize_elementor_template_type( $document->get_name(), $post_type );
+
+						if ( '' !== $template_type ) {
+							return $template_type;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				// Fall back to stored meta/post type below.
+			}
+		}
+
+		$stored_type = get_post_meta( $post_id, '_elementor_template_type', true );
+		$template_type = $this->normalize_elementor_template_type( $stored_type, $post_type );
+
+		if ( '' !== $template_type ) {
+			return $template_type;
+		}
+
+		if ( 'page' === $post_type ) {
+			return 'wp-page';
+		}
+
+		return 'wp-post';
+	}
+
+	/**
+	 * Normalize Elementor document type names while upgrading legacy page/post aliases.
+	 *
+	 * @param mixed  $template_type Raw document type.
+	 * @param string $post_type     WordPress post type.
+	 * @return string
+	 */
+	private function normalize_elementor_template_type( $template_type, $post_type ) {
+		if ( ! is_string( $template_type ) || '' === trim( $template_type ) ) {
+			return '';
+		}
+
+		$template_type = sanitize_key( $template_type );
+
+		if ( 'page' === $template_type && 'page' === $post_type ) {
+			return 'wp-page';
+		}
+
+		if ( 'post' === $template_type && 'post' === $post_type ) {
+			return 'wp-post';
+		}
+
+		return $template_type;
 	}
 
 	/**
