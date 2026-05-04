@@ -134,11 +134,12 @@ final class Plugin {
 		],
 	];
 	private const TEMPLATE_COMPONENTS       = [
-		'service-page-1-column' => [ 'hero', 'intro', 'content', 'cta_wide', 'faq', 'related' ],
-		'service-page-2'        => [ 'hero', 'spacer', 'intro', 'image_text', 'text_image', 'cta_wide', 'faq', 'content', 'related' ],
-		'service-page-3'        => [ 'hero', 'intro', 'content', 'cta_cover', 'cta_wide', 'tabs', 'faq' ],
+		'service-page-1-column' => [ 'breadcrumbs', 'hero', 'intro', 'content', 'cta_wide', 'faq', 'related' ],
+		'service-page-2'        => [ 'breadcrumbs', 'hero', 'spacer', 'intro', 'image_text', 'text_image', 'cta_wide', 'faq', 'content', 'related' ],
+		'service-page-3'        => [ 'breadcrumbs', 'hero', 'intro', 'content', 'cta_cover', 'cta_wide', 'tabs', 'faq' ],
 	];
 	private const TEMPLATE_COMPONENT_LABELS = [
+		'breadcrumbs' => 'Breadcrumbs',
 		'hero'       => 'Hero section',
 		'intro'      => 'Intro paragraph',
 		'spacer'     => 'Hero spacer',
@@ -3172,6 +3173,9 @@ final class Plugin {
 				'Basic - 1 column'   => 'content',
 				'Basic Content'      => 'content',
 				'Basic + Sidebar'    => 'content',
+				'Main content 1'     => 'content',
+				'Main content 2'     => 'content',
+				'Main content 3'     => 'content',
 				'Image-text'         => 'image_text',
 				'text-image'         => 'text_image',
 				'CTA wide'           => 'cta_wide',
@@ -3208,14 +3212,10 @@ final class Plugin {
 	}
 
 	private static function get_orderable_template_components( string $template_slug ): array {
-		$components = [ 'breadcrumbs' ];
+		$components = [];
 
 		foreach ( self::TEMPLATE_COMPONENTS[ $template_slug ] ?? [] as $component ) {
 			if ( 'cta_card' === $component ) {
-				continue;
-			}
-
-			if ( 'service-page-3' === $template_slug && 'cta_cover' === $component ) {
 				continue;
 			}
 
@@ -3241,16 +3241,6 @@ final class Plugin {
 		$definitions = [];
 
 		foreach ( self::get_orderable_template_components( $template_slug ) as $component ) {
-			if ( 'breadcrumbs' === $component ) {
-				$definitions[ $component ] = __( 'Breadcrumbs', 'nova-bridge-suite' );
-				continue;
-			}
-
-			if ( 'service-page-3' === $template_slug && 'content' === $component ) {
-				$definitions[ $component ] = __( 'Main content + sidebar CTA', 'nova-bridge-suite' );
-				continue;
-			}
-
 			if ( isset( self::TEMPLATE_COMPONENT_LABELS[ $component ] ) ) {
 				$definitions[ $component ] = self::TEMPLATE_COMPONENT_LABELS[ $component ];
 			}
@@ -4172,7 +4162,10 @@ final class Plugin {
 			try {
 				$content_source = '' !== \trim( $template_content ) ? $template_content : (string) $post->post_content;
 				$blocks = \parse_blocks( $content_source );
-				$breadcrumbs = $this->render_breadcrumbs( $post_id );
+				$breadcrumbs = '';
+				if ( $this->template_component_active( $template_slug, 'breadcrumbs' ) ) {
+					$breadcrumbs = $this->render_breadcrumbs( $post_id );
+				}
 
 				if ( ! empty( $blocks ) ) {
 					if ( '' !== \trim( $breadcrumbs ) ) {
@@ -4251,12 +4244,14 @@ final class Plugin {
 			}
 
 			$component = $this->get_orderable_component_for_block( $block, $template_slug );
-			if ( '' !== $component ) {
+			$promote_children = $this->should_promote_orderable_children( $block, $template_slug );
+
+			if ( '' !== $component && ! $promote_children ) {
 				$prepared[] = $block;
 				continue;
 			}
 
-			if ( $this->should_promote_orderable_children( $block, $template_slug ) ) {
+			if ( $promote_children ) {
 				$children = $this->promote_orderable_component_blocks( $block['innerBlocks'] ?? [], $template_slug );
 
 				if ( $this->block_list_has_orderable_component( $children, $template_slug ) ) {
@@ -4265,6 +4260,11 @@ final class Plugin {
 					}
 					continue;
 				}
+			}
+
+			if ( '' !== $component ) {
+				$prepared[] = $block;
+				continue;
 			}
 
 			if ( ! empty( $block['innerBlocks'] ) && \is_array( $block['innerBlocks'] ) ) {
@@ -4287,7 +4287,54 @@ final class Plugin {
 			return true;
 		}
 
+		if ( 'service-page-3' === $template_slug && 'Basic + Sidebar' === $metadata ) {
+			return $this->should_split_template_three_sidebar_cta();
+		}
+
 		return 'core/column' === ( $block['blockName'] ?? '' ) && $this->block_list_has_orderable_component( $block['innerBlocks'], $template_slug );
+	}
+
+	private function should_split_template_three_sidebar_cta(): bool {
+		$content_enabled = $this->template_component_active( 'service-page-3', 'content' );
+		$cta_enabled = $this->template_component_active( 'service-page-3', 'cta_cover' );
+
+		if ( ! $cta_enabled ) {
+			return false;
+		}
+
+		if ( ! $content_enabled ) {
+			return true;
+		}
+
+		return ! $this->template_three_sidebar_cta_follows_content();
+	}
+
+	private function template_three_sidebar_cta_follows_content(): bool {
+		$definitions = $this->get_template_component_order_definitions( 'service-page-3' );
+		$order = $this->get_template_component_order_settings( 'service-page-3' );
+		$order_keys = array_keys( $definitions );
+
+		usort(
+			$order_keys,
+			static function ( string $left_key, string $right_key ) use ( $order, $definitions ): int {
+				$left = (int) ( $order[ $left_key ] ?? 0 );
+				$right = (int) ( $order[ $right_key ] ?? 0 );
+
+				if ( $left === $right ) {
+					return strcmp(
+						(string) ( $definitions[ $left_key ] ?? $left_key ),
+						(string) ( $definitions[ $right_key ] ?? $right_key )
+					);
+				}
+
+				return $left <=> $right;
+			}
+		);
+
+		$content_index = array_search( 'content', $order_keys, true );
+		$cta_index = array_search( 'cta_cover', $order_keys, true );
+
+		return false !== $content_index && false !== $cta_index && (int) $cta_index === (int) $content_index + 1;
 	}
 
 	private function block_list_has_orderable_component( array $blocks, string $template_slug ): bool {
@@ -4747,7 +4794,9 @@ final class Plugin {
 		ob_start();
 		?>
 		<div class="<?php echo esc_attr( implode( ' ', $wrap_classes ) ); ?>"<?php echo $wrap_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
-			<?php echo $this->render_breadcrumbs( $post_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<?php if ( $this->template_component_active( $template_slug, 'breadcrumbs' ) ) : ?>
+				<?php echo $this->render_breadcrumbs( $post_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<?php endif; ?>
 			<?php if ( $this->component_enabled( 'hero' ) ) : ?>
 				<section class="service-cpt__hero">
 					<div class="service-cpt__hero-inner">
@@ -7335,9 +7384,7 @@ final class Plugin {
 									</li>
 								<?php endforeach; ?>
 							</ol>
-							<?php if ( 'service-page-3' === $selected_template ) : ?>
-								<p class="description"><?php esc_html_e( 'Template 3 keeps the sidebar CTA inside the main content/sidebar section so the two-column layout stays intact.', 'nova-bridge-suite' ); ?></p>
-							<?php endif; ?>
+							<p class="description"><?php esc_html_e( 'The same sections can be enabled, disabled, and reordered here; disabled sections are removed wherever they appear in the order.', 'nova-bridge-suite' ); ?></p>
 						<?php endif; ?>
 					</div>
 				</details>

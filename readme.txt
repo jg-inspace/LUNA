@@ -40,6 +40,19 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 == Screenshots ==
 1. NOVA Settings screen with module toggles.
 
+== Changelog ==
+
+= 2.5.0 =
+* Rework the Service CPT templates with breadcrumbs, hero background images, sidebar CTA images, and drag-and-drop section ordering.
+* Sync Service CPT template section toggles with the section order sorter, including breadcrumbs and Template 3 CTA cover.
+* Add Service CPT CTA color controls and a transparent outline preset, with safer handling for empty CTA content and buttons without URLs.
+* Improve Service CPT layout behavior so template 2 images and template 3 sidebar CTAs stay centered while text reclaims space when media is missing.
+* Use the active site language for default Service CPT labels such as FAQ, related articles, read more, and CTA text.
+* Use real service excerpts and meta copy on archive cards instead of placeholder template text.
+* Make Service CPT header offset and hero-to-intro spacing apply reliably on the frontend.
+* Prevent Service CPT template/settings saves from crashing during template changes or WPML all-languages admin views.
+* Keep hero background images, outline styles, and wide/sidebar CTA styles scoped to their own sections so nested blocks do not break the layout.
+
 = 2.4.10 =
 * Further reduce memory usage during post edit, save, trash, and delete actions by preventing unnecessary module loading.
 * Keep disabled modules from loading through route-aware bootstrap paths.
