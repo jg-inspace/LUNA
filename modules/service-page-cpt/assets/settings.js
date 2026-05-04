@@ -4,8 +4,9 @@ window.addEventListener('DOMContentLoaded', function () {
 	const inputs = Array.from(document.querySelectorAll('.service-cpt-setting'));
 	const colorPresetSelect = document.getElementById('service-cpt-color-preset');
 	const spacingPresetSelect = document.getElementById('service-cpt-spacing-preset');
+	const hasOrderLists = Boolean(document.querySelector('[data-service-cpt-order-list]'));
 
-	if (!inputs.length) {
+	if (!inputs.length && !hasOrderLists) {
 		return;
 	}
 
@@ -303,6 +304,78 @@ window.addEventListener('DOMContentLoaded', function () {
 			});
 		};
 		input.addEventListener('input', updateFilter);
+	});
+
+	const orderLists = Array.from(document.querySelectorAll('[data-service-cpt-order-list]'));
+	orderLists.forEach((list) => {
+		let draggedItem = null;
+
+		const syncOrderValues = () => {
+			Array.from(list.querySelectorAll('.service-cpt-component-order__item')).forEach((item, index) => {
+				const position = index + 1;
+				const positionLabel = item.querySelector('[data-order-position]');
+				const input = item.querySelector('[data-order-input]');
+
+				if (positionLabel) {
+					positionLabel.textContent = String(position);
+				}
+
+				if (input) {
+					input.value = String(position * 10);
+				}
+			});
+		};
+
+		Array.from(list.querySelectorAll('.service-cpt-component-order__item')).forEach((item) => {
+			item.setAttribute('draggable', 'true');
+
+			item.addEventListener('dragstart', (event) => {
+				draggedItem = item;
+				item.classList.add('is-sorting');
+
+				if (event.dataTransfer) {
+					event.dataTransfer.effectAllowed = 'move';
+					try {
+						event.dataTransfer.setData('text/plain', 'move');
+					} catch (error) {}
+				}
+			});
+
+			item.addEventListener('dragover', (event) => {
+				if (!draggedItem || draggedItem === item) {
+					return;
+				}
+
+				event.preventDefault();
+				const rect = item.getBoundingClientRect();
+				const before = event.clientY < rect.top + rect.height / 2;
+
+				if (before) {
+					list.insertBefore(draggedItem, item);
+				} else {
+					list.insertBefore(draggedItem, item.nextSibling);
+				}
+			});
+
+			item.addEventListener('drop', (event) => {
+				event.preventDefault();
+				syncOrderValues();
+			});
+
+			item.addEventListener('dragend', () => {
+				item.classList.remove('is-sorting');
+				draggedItem = null;
+				syncOrderValues();
+			});
+		});
+
+		list.addEventListener('dragover', (event) => {
+			if (draggedItem) {
+				event.preventDefault();
+			}
+		});
+
+		syncOrderValues();
 	});
 
 	updatePresetSelections();

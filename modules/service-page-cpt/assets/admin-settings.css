@@ -212,3 +212,56 @@
 	gap: 6px;
 	flex-wrap: wrap;
 }
+.service-cpt-component-order {
+	list-style: none;
+	margin: 10px 0 0;
+	padding: 0;
+	max-width: 780px;
+	border: 1px solid #dcdcde;
+	border-radius: 8px;
+	background: #fff;
+}
+.service-cpt-component-order__item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 9px 11px;
+	margin: 0;
+	border-top: 1px solid #f0f0f1;
+	cursor: grab;
+	user-select: none;
+}
+.service-cpt-component-order__item:first-child {
+	border-top: 0;
+}
+.service-cpt-component-order__item.is-sorting {
+	opacity: 0.55;
+}
+.service-cpt-component-order__item:active {
+	cursor: grabbing;
+}
+.service-cpt-component-order__handle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #fff;
+	color: #50575e;
+	cursor: grab;
+}
+.service-cpt-component-order__handle:active {
+	cursor: grabbing;
+}
+.service-cpt-component-order__label {
+	padding-right: 12px;
+}
+.service-cpt-component-order__position {
+	margin-left: auto;
+	min-width: 24px;
+	text-align: right;
+	color: #50575e;
+	font-variant-numeric: tabular-nums;
+}

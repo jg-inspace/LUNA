@@ -19,12 +19,15 @@ final class Plugin {
 	private const OPTION_TEMPLATE           = 'service_cpt_template';
 	private const OPTION_LABEL_FAQ          = 'service_cpt_label_faq';
 	private const OPTION_LABEL_RELATED      = 'service_cpt_label_related';
+	private const OPTION_LABEL_LANGUAGE     = 'service_cpt_label_language';
 	private const OPTION_GLOBAL_HERO_PRIMARY_LABEL = 'service_cpt_global_hero_primary_label';
 	private const OPTION_GLOBAL_HERO_PRIMARY_URL = 'service_cpt_global_hero_primary_url';
 	private const OPTION_GLOBAL_HERO_SECONDARY_LABEL = 'service_cpt_global_hero_secondary_label';
 	private const OPTION_GLOBAL_HERO_SECONDARY_URL = 'service_cpt_global_hero_secondary_url';
+	private const OPTION_GLOBAL_HERO_BACKGROUND_IMAGE = 'service_cpt_global_hero_background_image';
 	private const OPTION_GLOBAL_SIDEBAR_TITLE = 'service_cpt_global_sidebar_title';
 	private const OPTION_GLOBAL_SIDEBAR_COPY = 'service_cpt_global_sidebar_copy';
+	private const OPTION_GLOBAL_SIDEBAR_IMAGE = 'service_cpt_global_sidebar_image';
 	private const OPTION_GLOBAL_SIDEBAR_PRIMARY_LABEL = 'service_cpt_global_sidebar_primary_label';
 	private const OPTION_GLOBAL_SIDEBAR_PRIMARY_URL = 'service_cpt_global_sidebar_primary_url';
 	private const OPTION_GLOBAL_SIDEBAR_SECONDARY_LABEL = 'service_cpt_global_sidebar_secondary_label';
@@ -47,6 +50,10 @@ final class Plugin {
 	private const OPTION_COLOR_HERO_TEXT    = 'service_cpt_color_hero_text';
 	private const OPTION_COLOR_CTA_BG       = 'service_cpt_color_cta_bg';
 	private const OPTION_COLOR_CTA_TEXT     = 'service_cpt_color_cta_text';
+	private const OPTION_COLOR_SIDEBAR_CTA_BG = 'service_cpt_color_sidebar_cta_bg';
+	private const OPTION_COLOR_SIDEBAR_CTA_TEXT = 'service_cpt_color_sidebar_cta_text';
+	private const OPTION_COLOR_WIDE_CTA_BG  = 'service_cpt_color_wide_cta_bg';
+	private const OPTION_COLOR_WIDE_CTA_TEXT = 'service_cpt_color_wide_cta_text';
 	private const OPTION_COLOR_BUTTON_BG    = 'service_cpt_color_button_bg';
 	private const OPTION_COLOR_BUTTON_TEXT  = 'service_cpt_color_button_text';
 	private const OPTION_COLOR_BUTTON_OUTLINE = 'service_cpt_color_button_outline';
@@ -65,6 +72,7 @@ final class Plugin {
 	private const OPTION_CONTENT_WIDTH      = 'service_cpt_content_width';
 	private const OPTION_WIDE_WIDTH         = 'service_cpt_wide_width';
 	private const OPTION_TEMPLATE_COMPONENTS = 'service_cpt_template_components';
+	private const OPTION_TEMPLATE_COMPONENT_ORDER = 'service_cpt_template_component_order';
 	private const OPTION_ARCHIVE_HERO_EYEBROW = 'service_cpt_archive_hero_eyebrow';
 	private const OPTION_ARCHIVE_HERO_TITLE = 'service_cpt_archive_hero_title';
 	private const OPTION_ARCHIVE_HERO_COPY = 'service_cpt_archive_hero_copy';
@@ -102,6 +110,7 @@ final class Plugin {
 	private const DEFAULT_CONTENT_WIDTH     = '1600px';
 	private const DEFAULT_WIDE_WIDTH        = '1800px';
 	private const DEFAULT_TEMPLATE          = 'service-page-1-column';
+	private const DEFAULT_LABEL_LANGUAGE    = 'auto';
 	private const DEFAULT_COMPONENTS        = [
 		'hero'        => true,
 		'intro'       => true,
@@ -125,7 +134,7 @@ final class Plugin {
 		],
 	];
 	private const TEMPLATE_COMPONENTS       = [
-		'service-page-1-column' => [ 'hero', 'intro', 'content', 'cta_cover', 'cta_wide', 'faq', 'related' ],
+		'service-page-1-column' => [ 'hero', 'intro', 'content', 'cta_wide', 'faq', 'related' ],
 		'service-page-2'        => [ 'hero', 'spacer', 'intro', 'image_text', 'text_image', 'cta_wide', 'faq', 'content', 'related' ],
 		'service-page-3'        => [ 'hero', 'intro', 'content', 'cta_cover', 'cta_wide', 'tabs', 'faq' ],
 	];
@@ -153,6 +162,7 @@ final class Plugin {
 		self::OPTION_GLOBAL_HERO_SECONDARY_URL,
 		self::OPTION_GLOBAL_SIDEBAR_TITLE,
 		self::OPTION_GLOBAL_SIDEBAR_COPY,
+		self::OPTION_GLOBAL_SIDEBAR_IMAGE,
 		self::OPTION_GLOBAL_SIDEBAR_PRIMARY_LABEL,
 		self::OPTION_GLOBAL_SIDEBAR_PRIMARY_URL,
 		self::OPTION_GLOBAL_SIDEBAR_SECONDARY_LABEL,
@@ -266,6 +276,7 @@ final class Plugin {
 		\add_action( 'init', [ $this, 'register_meta_fields' ] );
 		\add_action( 'init', [ $this, 'register_block' ] );
 		\add_action( 'init', [ $this, 'register_block_patterns' ] );
+		\add_action( 'init', [ $this, 'maybe_migrate_archive_placeholder_defaults' ], 30 );
 		\add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_front_assets' ] );
 		\add_action( 'enqueue_block_editor_assets', [ $this, 'enqueue_editor_assets' ] );
 		\add_action( 'wp', [ $this, 'maybe_override_faq_schema' ] );
@@ -283,6 +294,7 @@ final class Plugin {
 		\add_action( 'save_post_' . self::CPT, [ $this, 'ensure_template_content_on_save' ], 5, 3 );
 		\add_action( 'save_post_' . self::CPT, [ $this, 'save_meta_box' ], 10, 2 );
 		\add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
+		\add_action( 'admin_init', [ $this, 'redirect_all_language_admin_scope' ], 0 );
 
 		\add_action( 'admin_menu', [ $this, 'register_settings_page' ] );
 		\add_action( 'admin_init', [ $this, 'register_settings' ] );
@@ -314,6 +326,7 @@ final class Plugin {
 
 		\add_option( self::OPTION_CONTENT_WIDTH, self::DEFAULT_CONTENT_WIDTH );
 		\add_option( self::OPTION_WIDE_WIDTH, self::DEFAULT_WIDE_WIDTH );
+		\add_option( self::OPTION_LABEL_LANGUAGE, self::DEFAULT_LABEL_LANGUAGE );
 		\add_option( self::OPTION_SPACE_SCALE, self::DEFAULT_SPACE_SCALE );
 		\add_option( self::OPTION_SPACE_SECTION_PADDING, self::DEFAULT_SPACE_SECTION_PADDING );
 		\add_option( self::OPTION_SPACE_SECTION_GAP, self::DEFAULT_SPACE_SECTION_GAP );
@@ -362,7 +375,7 @@ final class Plugin {
 			'rest_base'          => $base,
 			'menu_position'      => 22,
 			'menu_icon'          => 'dashicons-screenoptions',
-			'supports'           => [ 'title', 'thumbnail', 'revisions', 'author', 'page-attributes' ],
+			'supports'           => [ 'title', 'excerpt', 'thumbnail', 'revisions', 'author', 'page-attributes' ],
 			'rewrite'            => [
 				'slug'         => $base,
 				'with_front'   => false,
@@ -421,6 +434,245 @@ final class Plugin {
 		return \Nova_Bridge_Suite_WPML_Support::get_localized_option_name( $option );
 	}
 
+	private function get_label_language_options(): array {
+		return [
+			'auto' => __( 'Auto (site language)', 'nova-bridge-suite' ),
+			'en'   => __( 'English', 'nova-bridge-suite' ),
+			'nl'   => __( 'Dutch', 'nova-bridge-suite' ),
+			'de'   => __( 'German', 'nova-bridge-suite' ),
+			'fr'   => __( 'French', 'nova-bridge-suite' ),
+			'es'   => __( 'Spanish', 'nova-bridge-suite' ),
+			'pt'   => __( 'Portuguese', 'nova-bridge-suite' ),
+			'it'   => __( 'Italian', 'nova-bridge-suite' ),
+			'pl'   => __( 'Polish', 'nova-bridge-suite' ),
+			'sv'   => __( 'Swedish', 'nova-bridge-suite' ),
+			'da'   => __( 'Danish', 'nova-bridge-suite' ),
+			'no'   => __( 'Norwegian', 'nova-bridge-suite' ),
+			'fi'   => __( 'Finnish', 'nova-bridge-suite' ),
+			'cs'   => __( 'Czech', 'nova-bridge-suite' ),
+			'ro'   => __( 'Romanian', 'nova-bridge-suite' ),
+			'tr'   => __( 'Turkish', 'nova-bridge-suite' ),
+		];
+	}
+
+	private function get_selected_label_language(): string {
+		$stored = \get_option( self::OPTION_LABEL_LANGUAGE, self::DEFAULT_LABEL_LANGUAGE );
+
+		return $this->sanitize_label_language_option( $stored );
+	}
+
+	public function sanitize_label_language_option( $value ): string {
+		$key     = \sanitize_key( (string) $value );
+		$choices = $this->get_label_language_options();
+
+		return \array_key_exists( $key, $choices ) ? $key : self::DEFAULT_LABEL_LANGUAGE;
+	}
+
+	private function get_effective_label_language(): string {
+		$selected = $this->get_selected_label_language();
+
+		if ( 'auto' !== $selected ) {
+			return $selected;
+		}
+
+		$multilingual_language = \Nova_Bridge_Suite_WPML_Support::get_current_language_code();
+		$prefix = $this->normalize_label_language_prefix( $multilingual_language );
+
+		if ( '' !== $prefix ) {
+			return $prefix;
+		}
+
+		$locale = \get_locale();
+		$prefix = $this->normalize_label_language_prefix( \is_string( $locale ) ? $locale : '' );
+
+		return '' !== $prefix ? $prefix : 'en';
+	}
+
+	private function normalize_label_language_prefix( string $language ): string {
+		$language = \strtolower( \trim( $language ) );
+
+		if ( '' === $language ) {
+			return '';
+		}
+
+		$language = (string) \preg_replace( '/[^a-z0-9]+/', '_', $language );
+		$prefix  = \substr( \trim( $language, '_' ), 0, 2 );
+		$aliases = [
+			'nb' => 'no',
+			'nn' => 'no',
+		];
+
+		if ( isset( $aliases[ $prefix ] ) ) {
+			$prefix = $aliases[ $prefix ];
+		}
+
+		$supported = \array_keys( $this->get_label_language_options() );
+		$supported = \array_diff( $supported, [ 'auto' ] );
+
+		return \in_array( $prefix, $supported, true ) ? $prefix : '';
+	}
+
+	private function get_label_language_defaults_map(): array {
+		return [
+			'en' => [
+				'faq'              => 'FAQ',
+				'related_articles' => 'Related articles',
+				'read_more'        => 'Read more',
+				'see_services'     => 'See our services',
+			],
+			'nl' => [
+				'faq'              => 'Veelgestelde vragen',
+				'related_articles' => 'Gerelateerde artikelen',
+				'read_more'        => 'Lees meer',
+				'see_services'     => 'Bekijk onze diensten',
+			],
+			'de' => [
+				'faq'              => 'Häufig gestellte Fragen',
+				'related_articles' => 'Ähnliche Artikel',
+				'read_more'        => 'Mehr lesen',
+				'see_services'     => 'Unsere Leistungen ansehen',
+			],
+			'fr' => [
+				'faq'              => 'Questions fréquentes',
+				'related_articles' => 'Articles associés',
+				'read_more'        => 'Lire la suite',
+				'see_services'     => 'Voir nos services',
+			],
+			'es' => [
+				'faq'              => 'Preguntas frecuentes',
+				'related_articles' => 'Artículos relacionados',
+				'read_more'        => 'Leer más',
+				'see_services'     => 'Ver nuestros servicios',
+			],
+			'pt' => [
+				'faq'              => 'Perguntas frequentes',
+				'related_articles' => 'Artigos relacionados',
+				'read_more'        => 'Ler mais',
+				'see_services'     => 'Ver nossos serviços',
+			],
+			'it' => [
+				'faq'              => 'Domande frequenti',
+				'related_articles' => 'Articoli correlati',
+				'read_more'        => 'Leggi di più',
+				'see_services'     => 'Vedi i nostri servizi',
+			],
+			'pl' => [
+				'faq'              => 'Najczęściej zadawane pytania',
+				'related_articles' => 'Powiązane artykuły',
+				'read_more'        => 'Czytaj więcej',
+				'see_services'     => 'Zobacz nasze usługi',
+			],
+			'sv' => [
+				'faq'              => 'Vanliga frågor',
+				'related_articles' => 'Relaterade artiklar',
+				'read_more'        => 'Läs mer',
+				'see_services'     => 'Se våra tjänster',
+			],
+			'da' => [
+				'faq'              => 'Ofte stillede spørgsmål',
+				'related_articles' => 'Relaterede artikler',
+				'read_more'        => 'Læs mere',
+				'see_services'     => 'Se vores tjenester',
+			],
+			'no' => [
+				'faq'              => 'Ofte stilte spørsmål',
+				'related_articles' => 'Relaterte artikler',
+				'read_more'        => 'Les mer',
+				'see_services'     => 'Se tjenestene våre',
+			],
+			'fi' => [
+				'faq'              => 'Usein kysytyt kysymykset',
+				'related_articles' => 'Aiheeseen liittyvät artikkelit',
+				'read_more'        => 'Lue lisää',
+				'see_services'     => 'Katso palvelumme',
+			],
+			'cs' => [
+				'faq'              => 'Často kladené otázky',
+				'related_articles' => 'Související články',
+				'read_more'        => 'Číst dál',
+				'see_services'     => 'Zobrazit naše služby',
+			],
+			'ro' => [
+				'faq'              => 'Întrebări frecvente',
+				'related_articles' => 'Articole similare',
+				'read_more'        => 'Citește mai mult',
+				'see_services'     => 'Vezi serviciile noastre',
+			],
+			'tr' => [
+				'faq'              => 'Sık sorulan sorular',
+				'related_articles' => 'İlgili yazılar',
+				'read_more'        => 'Daha fazla oku',
+				'see_services'     => 'Hizmetlerimizi gör',
+			],
+		];
+	}
+
+	private function get_label_language_defaults(): array {
+		$map      = $this->get_label_language_defaults_map();
+		$language = $this->get_effective_label_language();
+
+		return $map[ $language ] ?? $map['en'];
+	}
+
+	private function get_label_language_default( string $key, string $fallback ): string {
+		$defaults = $this->get_label_language_defaults();
+
+		return isset( $defaults[ $key ] ) && '' !== (string) $defaults[ $key ] ? (string) $defaults[ $key ] : $fallback;
+	}
+
+	private function get_archive_label_default_key( string $option ): string {
+		$map = [
+			self::OPTION_ARCHIVE_HERO_CTA_LABEL => 'see_services',
+			self::OPTION_ARCHIVE_CARD_CTA_LABEL => 'read_more',
+		];
+
+		return isset( $map[ $option ] ) ? $map[ $option ] : '';
+	}
+
+	private function normalize_generic_label_value( string $value ): string {
+		$value = \html_entity_decode( \wp_strip_all_tags( $value ), ENT_QUOTES, 'UTF-8' );
+		$value = (string) \preg_replace( '/\s+/u', ' ', \trim( $value ) );
+
+		return $value;
+	}
+
+	private function generic_label_values_for_key( string $key ): array {
+		$values = [];
+
+		foreach ( $this->get_label_language_defaults_map() as $defaults ) {
+			if ( isset( $defaults[ $key ] ) ) {
+				$values[] = (string) $defaults[ $key ];
+			}
+		}
+
+		$legacy_values = [
+			'faq'              => [ 'Faq', 'FAQ', 'Frequently asked questions' ],
+			'related_articles' => [ 'Related articles', 'Related Articles' ],
+			'read_more'        => [ 'Learn more', 'Read more' ],
+			'see_services'     => [ 'See our services' ],
+		];
+
+		if ( isset( $legacy_values[ $key ] ) ) {
+			$values = \array_merge( $values, $legacy_values[ $key ] );
+		}
+
+		$normalized = [];
+		foreach ( $values as $value ) {
+			$value = $this->normalize_generic_label_value( $value );
+			if ( '' !== $value ) {
+				$normalized[] = $value;
+			}
+		}
+
+		return \array_values( \array_unique( $normalized ) );
+	}
+
+	private function is_generic_label_value( string $value, string $default_key ): bool {
+		$value = $this->normalize_generic_label_value( $value );
+
+		return '' !== $value && \in_array( $value, $this->generic_label_values_for_key( $default_key ), true );
+	}
+
 	private function get_singular_name(): string {
 		$default = __( 'Service Page', 'nova-bridge-suite' );
 		$value   = \sanitize_text_field( (string) \get_option( self::OPTION_SINGULAR, $default ) );
@@ -469,19 +721,38 @@ final class Plugin {
 
 	private function get_archive_defaults(): array {
 		return [
-			self::OPTION_ARCHIVE_HERO_EYEBROW    => __( 'Our amazing clients', 'nova-bridge-suite' ),
-			self::OPTION_ARCHIVE_HERO_TITLE      => "The Perfect Theme For\nStunning Websites!",
-			self::OPTION_ARCHIVE_HERO_COPY       => __( 'Lorem ipsum dolor sit amet consectetur adipiscing eiusmod tempor incididunt.', 'nova-bridge-suite' ),
-			self::OPTION_ARCHIVE_HERO_CTA_LABEL  => __( 'See our services', 'nova-bridge-suite' ),
+			self::OPTION_ARCHIVE_HERO_EYEBROW    => '',
+			self::OPTION_ARCHIVE_HERO_TITLE      => '',
+			self::OPTION_ARCHIVE_HERO_COPY       => '',
+			self::OPTION_ARCHIVE_HERO_CTA_LABEL  => $this->get_label_language_default( 'see_services', __( 'See our services', 'nova-bridge-suite' ) ),
 			self::OPTION_ARCHIVE_HERO_CTA_URL    => '#service-cpt-archive-services',
-			self::OPTION_ARCHIVE_INTRO_HEADING   => __( 'Service overview', 'nova-bridge-suite' ),
-			self::OPTION_ARCHIVE_INTRO_COPY      => __( 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent rutrum aliquet nunc, non porta quam luctus non. Phasellus ut tristique velit, in porta tortor. Curabitur efficitur finibus leo, id laoreet mi posuere ut.', 'nova-bridge-suite' ),
-			self::OPTION_ARCHIVE_CARD_CTA_LABEL  => __( 'Learn more', 'nova-bridge-suite' ),
+			self::OPTION_ARCHIVE_INTRO_HEADING   => '',
+			self::OPTION_ARCHIVE_INTRO_COPY      => '',
+			self::OPTION_ARCHIVE_CARD_CTA_LABEL  => $this->get_label_language_default( 'read_more', __( 'Read more', 'nova-bridge-suite' ) ),
 			self::OPTION_ARCHIVE_SERVICES_MODE   => 'auto',
 			self::OPTION_ARCHIVE_SERVICES_LIMIT  => '0',
 			self::OPTION_ARCHIVE_SEO_TITLE       => '',
 			self::OPTION_ARCHIVE_SEO_DESCRIPTION => '',
 		];
+	}
+
+	public function maybe_migrate_archive_placeholder_defaults(): void {
+		$legacy_defaults = [
+			self::OPTION_ARCHIVE_HERO_EYEBROW  => 'Our amazing clients',
+			self::OPTION_ARCHIVE_HERO_TITLE    => "The Perfect Theme For\nStunning Websites!",
+			self::OPTION_ARCHIVE_HERO_COPY     => 'Lorem ipsum dolor sit amet consectetur adipiscing eiusmod tempor incididunt.',
+			self::OPTION_ARCHIVE_INTRO_HEADING => 'Service overview',
+			self::OPTION_ARCHIVE_INTRO_COPY    => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent rutrum aliquet nunc, non porta quam luctus non. Phasellus ut tristique velit, in porta tortor. Curabitur efficitur finibus leo, id laoreet mi posuere ut.',
+		];
+
+		foreach ( $legacy_defaults as $option => $legacy_value ) {
+			$current = \get_option( $option, null );
+			$current_normalized = \is_string( $current ) ? str_replace( [ "\r\n", "\r" ], "\n", $current ) : $current;
+
+			if ( $legacy_value === $current_normalized ) {
+				\update_option( $option, '' );
+			}
+		}
 	}
 
 	private function get_archive_default( string $option ): string {
@@ -492,7 +763,22 @@ final class Plugin {
 
 	private function get_archive_text_option( string $option ): string {
 		$default = $this->get_archive_default( $option );
-		$value = \sanitize_text_field( (string) \get_option( $option, $default ) );
+		$raw     = \get_option( $option, null );
+
+		if ( null === $raw || false === $raw ) {
+			return $default;
+		}
+
+		$value = \sanitize_text_field( (string) $raw );
+		$default_key = $this->get_archive_label_default_key( $option );
+
+		if ( '' === $value ) {
+			return $default;
+		}
+
+		if ( '' !== $default_key && $this->is_generic_label_value( $value, $default_key ) ) {
+			return $default;
+		}
 
 		return $value;
 	}
@@ -572,19 +858,35 @@ final class Plugin {
 		return \get_posts( $args );
 	}
 
-	private function get_section_label( string $option, string $fallback ): string {
-		$value = \get_option( $option, '' );
+	private function get_section_label( string $option, string $fallback, string $default_key = '' ): string {
+		$default = '' !== $default_key ? $this->get_label_language_default( $default_key, $fallback ) : $fallback;
+		$value = \get_option( $option, null );
+
+		if ( null === $value || false === $value ) {
+			return $default;
+		}
+
 		$value = \sanitize_text_field( (string) $value );
 
-		return '' !== $value ? $value : $fallback;
+		if ( '' === $value ) {
+			return $default;
+		}
+
+		if ( '' !== $default_key && $this->is_generic_label_value( $value, $default_key ) ) {
+			return $default;
+		}
+
+		return $value;
 	}
 
 	private function get_faq_heading_label(): string {
-		return $this->get_section_label( self::OPTION_LABEL_FAQ, __( 'Faq', 'nova-bridge-suite' ) );
+		$label = $this->get_section_label( self::OPTION_LABEL_FAQ, __( 'FAQ', 'nova-bridge-suite' ), 'faq' );
+
+		return 'Faq' === $label ? $this->get_label_language_default( 'faq', __( 'FAQ', 'nova-bridge-suite' ) ) : $label;
 	}
 
 	private function get_related_heading_label(): string {
-		return $this->get_section_label( self::OPTION_LABEL_RELATED, __( 'Related articles', 'nova-bridge-suite' ) );
+		return $this->get_section_label( self::OPTION_LABEL_RELATED, __( 'Related articles', 'nova-bridge-suite' ), 'related_articles' );
 	}
 
 	private function get_template_content( string $slug ): string {
@@ -682,6 +984,7 @@ final class Plugin {
 			'sp_hero_secondary_url',
 		];
 		$sidebar_cta_keys = [
+			'sp_sidebar_image',
 			'sp_sidebar_title',
 			'sp_sidebar_copy',
 			'sp_sidebar_primary_label',
@@ -769,6 +1072,7 @@ final class Plugin {
 			],
 			'sp_image_1'              => $this->media_meta(),
 			'sp_image_2'              => $this->media_meta(),
+			'sp_sidebar_image'        => $this->media_meta(),
 			'sp_sidebar_title'        => $this->string_meta(),
 			'sp_sidebar_copy'         => $this->rich_text_meta(),
 			'sp_sidebar_primary_label'=> $this->string_meta(),
@@ -842,6 +1146,7 @@ final class Plugin {
 			'sp_table'                   => 'Table rows. First row is headers; each row is an array of cell strings. If you Example: [["Column 1","Column 2"],["Value 1","Value 2"]].',
 			'sp_image_1'                 => 'Attachment ID for the first content image.',
 			'sp_image_2'                 => 'Attachment ID for the second content image.',
+			'sp_sidebar_image'           => 'Optional sidebar CTA image attachment ID.',
 			'sp_sidebar_title'           => 'Sidebar CTA title.',
 			'sp_sidebar_copy'            => 'Sidebar CTA rich text.',
 			'sp_sidebar_primary_label'   => 'Sidebar CTA primary button label.',
@@ -1549,6 +1854,10 @@ final class Plugin {
 
 		$template_slug = $this->get_effective_template_slug( $this->current_service_post_id );
 
+		if ( 'service-page-2' === $template_slug && $this->template_two_image_column_is_empty( $block ) ) {
+			return '';
+		}
+
 		if ( ! $component ) {
 			// Backward compatibility: older template content may miss related component metadata.
 			if ( $is_latest_posts_block && $this->template_component_active( $template_slug, 'related' ) ) {
@@ -1566,11 +1875,29 @@ final class Plugin {
 			return '';
 		}
 
+		// Template 1 has no sidebar column, so only its wide CTA should render.
+		if ( 'service-page-1-column' === $template_slug && 'cta_cover' === $component ) {
+			return '';
+		}
+
 		if ( ! $this->component_enabled_for_template( $component, $template_slug ) ) {
 			return '';
 		}
 
+		if ( in_array( $component, [ 'cta_wide', 'cta_card' ], true ) && ! $this->wide_cta_has_displayable_content( $this->current_wide_cta ) ) {
+			return '';
+		}
+
+		if ( 'cta_cover' === $component && ! $this->sidebar_cta_has_displayable_content( $this->current_sidebar_cta ) ) {
+			return '';
+		}
+
 		$block_content = $this->inject_component_class_into_html( $block_content, $component );
+		$block_content = $this->inject_template_three_column_class( $block_content, $block, $template_slug );
+
+		if ( 'cta_cover' === $component && ( 'core/cover' === $block_name || false !== strpos( $block_content, 'wp-block-cover' ) ) ) {
+			$block_content = $this->inject_sidebar_cta_image( $block_content, $this->current_sidebar_cta );
+		}
 
 		if ( 'related' === $component ) {
 			$related_posts = $this->get_related_post_ids();
@@ -1595,12 +1922,55 @@ final class Plugin {
 	}
 
 	private function inject_component_class_into_html( string $block_content, string $component ): string {
+		return $this->inject_classes_into_html(
+			$block_content,
+			[
+				'service-cpt-component',
+				'service-cpt-component--' . $component,
+			]
+		);
+	}
+
+	private function inject_template_three_column_class( string $block_content, array $block, string $template_slug ): string {
+		if ( 'service-page-3' !== $template_slug || 'core/column' !== ( $block['blockName'] ?? '' ) ) {
+			return $block_content;
+		}
+
+		$metadata = $block['attrs']['metadata']['name'] ?? '';
+		if ( ! \is_string( $metadata ) || '' === $metadata ) {
+			return $block_content;
+		}
+
+		if ( 'Side-bar' === $metadata ) {
+			return $this->inject_classes_into_html( $block_content, [ 'service-cpt-template-3-sidebar-column' ] );
+		}
+
+		if ( 'Basic' === $metadata ) {
+			return $this->inject_classes_into_html( $block_content, [ 'service-cpt-template-3-main-column' ] );
+		}
+
+		return $block_content;
+	}
+
+	private function inject_classes_into_html( string $block_content, array $classes ): string {
 		if ( '' === $block_content ) {
 			return $block_content;
 		}
 
-		$needle = 'service-cpt-component--' . $component;
-		if ( false !== strpos( $block_content, $needle ) ) {
+		$classes = array_values(
+			array_filter(
+				array_unique(
+					array_map(
+						static function ( $class ): string {
+							return \sanitize_html_class( (string) $class );
+						},
+						$classes
+					)
+				)
+			)
+		);
+
+		if ( empty( $classes ) ) {
 			return $block_content;
 		}
 
@@ -1617,13 +1987,11 @@ final class Plugin {
 
 		if ( preg_match( '/\\bclass\\s*=\\s*([\\\"\\\'])([^\\\"\\\']*)\\1/i', $full_tag, $class_match ) ) {
 			$existing = preg_split( '/\\s+/', $class_match[2] ) ?: [];
-			$existing[] = 'service-cpt-component';
-			$existing[] = 'service-cpt-component--' . $component;
-			$existing = array_values( array_unique( array_filter( $existing ) ) );
+			$existing = array_values( array_unique( array_filter( array_merge( $existing, $classes ) ) ) );
 			$replacement = 'class=' . $class_match[1] . implode( ' ', $existing ) . $class_match[1];
 			$new_tag = preg_replace( '/\\bclass\\s*=\\s*([\\\"\\\'])([^\\\"\\\']*)\\1/i', $replacement, $full_tag, 1 );
 		} else {
-			$insert = ' class="service-cpt-component service-cpt-component--' . $component . '"';
+			$insert = ' class="' . implode( ' ', $classes ) . '"';
 			if ( '/>' === substr( $full_tag, -2 ) ) {
 				$new_tag = substr( $full_tag, 0, -2 ) . $insert . ' />';
 			} else {
@@ -2348,6 +2716,36 @@ final class Plugin {
 		}
 
 		if ( in_array( $component, [ 'content', 'image_text', 'text_image' ], true ) ) {
+			$template_slug = $this->current_service_post_id > 0 ? $this->get_effective_template_slug( $this->current_service_post_id ) : $this->get_selected_template_slug();
+
+			if ( 'service-page-2' === $template_slug ) {
+				$template_two_content_map = [
+					'image_text' => 'sp_main_1',
+					'text_image' => 'sp_main_2',
+					'content'    => 'sp_main_3',
+				];
+				$template_two_image_map = [
+					'image_text' => 'sp_image_1',
+					'text_image' => 'sp_image_2',
+				];
+
+				if ( 'core/paragraph' === $block_name && isset( $template_two_content_map[ $component ] ) ) {
+					return $this->replace_block_rich_text( $block_content, $this->current_service_meta[ $template_two_content_map[ $component ] ] ?? '', [ 'p' ], true );
+				}
+
+				if ( 'core/image' === $block_name ) {
+					if ( isset( $template_two_image_map[ $component ] ) ) {
+						return $this->replace_block_image(
+							$block_content,
+							$this->format_media( (int) ( $this->current_service_meta[ $template_two_image_map[ $component ] ] ?? 0 ) ),
+							true
+						);
+					}
+
+					return '';
+				}
+			}
+
 			if ( 'core/heading' === $block_name ) {
 				$index = $this->content_heading_index;
 				$this->content_heading_index++;
@@ -2505,7 +2903,7 @@ final class Plugin {
 		$label = \trim( (string) $label );
 		$url   = \trim( (string) $url );
 
-		if ( '' === $label && $remove_if_empty ) {
+		if ( $remove_if_empty && ( '' === $label || '' === $url ) ) {
 			return '';
 		}
 
@@ -2570,6 +2968,32 @@ final class Plugin {
 		return $this->format_media( $attachment_id );
 	}
 
+	private function template_two_image_column_is_empty( array $block ): bool {
+		if ( 'core/column' !== ( $block['blockName'] ?? '' ) ) {
+			return false;
+		}
+
+		$metadata = $block['attrs']['metadata']['name'] ?? '';
+		if ( ! \is_string( $metadata ) || '' === $metadata ) {
+			return false;
+		}
+
+		$image_key = '';
+		if ( 'image-left' === $metadata ) {
+			$image_key = 'sp_image_1';
+		} elseif ( 'image-right' === $metadata ) {
+			$image_key = 'sp_image_2';
+		}
+
+		if ( '' === $image_key ) {
+			return false;
+		}
+
+		$media = $this->format_media( (int) ( $this->current_service_meta[ $image_key ] ?? 0 ) );
+
+		return '' === \trim( (string) ( $media['url'] ?? '' ) );
+	}
+
 	private function replace_block_image( string $block_content, array $media, bool $remove_if_empty ): string {
 		$url = isset( $media['url'] ) ? (string) $media['url'] : '';
 
@@ -2599,6 +3023,38 @@ final class Plugin {
 		}
 
 		return $result;
+	}
+
+	private function render_sidebar_cta_image( array $cta ): string {
+		$media = $cta['image'] ?? [];
+
+		if ( ! \is_array( $media ) || ! $this->cta_media_has_content( $media ) ) {
+			return '';
+		}
+
+		return sprintf(
+			'<figure class="service-cpt-sidebar-cta__media"><img src="%1$s" alt="%2$s" loading="lazy" decoding="async" /></figure>',
+			\esc_url( (string) ( $media['url'] ?? '' ) ),
+			\esc_attr( (string) ( $media['alt'] ?? '' ) )
+		);
+	}
+
+	private function inject_sidebar_cta_image( string $block_content, array $cta ): string {
+		if ( '' === $block_content || false !== strpos( $block_content, 'service-cpt-sidebar-cta__media' ) ) {
+			return $block_content;
+		}
+
+		$image_markup = $this->render_sidebar_cta_image( $cta );
+		if ( '' === $image_markup ) {
+			return $block_content;
+		}
+
+		$inner_pattern = '/(<div[^>]*class="[^"]*wp-block-cover__inner-container[^"]*"[^>]*>)/i';
+		if ( 1 === preg_match( $inner_pattern, $block_content ) ) {
+			return (string) preg_replace( $inner_pattern, '$1' . $image_markup, $block_content, 1 );
+		}
+
+		return $image_markup . $block_content;
 	}
 
 	private function replace_block_table( string $block_content, array $table ): string {
@@ -2702,11 +3158,15 @@ final class Plugin {
 
 		$block_name = $block['blockName'] ?? '';
 		$metadata   = $block['attrs']['metadata']['name'] ?? '';
+		$explicit_component = $block['attrs']['serviceCptComponent'] ?? '';
+
+		if ( \is_string( $explicit_component ) && '' !== $explicit_component ) {
+			return \sanitize_key( $explicit_component );
+		}
 
 		if ( \is_string( $metadata ) && '' !== $metadata ) {
 			$map = [
 				'Hero section + CTA' => 'hero',
-				'Header + intro'     => 'hero',
 				'Intro paragraph'    => 'intro',
 				'Spacer 50px'        => 'spacer',
 				'Basic - 1 column'   => 'content',
@@ -2716,6 +3176,8 @@ final class Plugin {
 				'text-image'         => 'text_image',
 				'CTA wide'           => 'cta_wide',
 				'Blocksy - Call to Action' => 'cta_cover',
+				'Extra copy'         => 'content',
+				'Main table'         => 'content',
 				'Faq'                => 'faq',
 				'Related articles'   => 'related',
 				'Related Articles'   => 'related',
@@ -2743,6 +3205,82 @@ final class Plugin {
 		}
 
 		return null;
+	}
+
+	private static function get_orderable_template_components( string $template_slug ): array {
+		$components = [ 'breadcrumbs' ];
+
+		foreach ( self::TEMPLATE_COMPONENTS[ $template_slug ] ?? [] as $component ) {
+			if ( 'cta_card' === $component ) {
+				continue;
+			}
+
+			if ( 'service-page-3' === $template_slug && 'cta_cover' === $component ) {
+				continue;
+			}
+
+			$components[] = $component;
+		}
+
+		return array_values( array_unique( $components ) );
+	}
+
+	private static function get_template_component_order_defaults_for_template( string $template_slug ): array {
+		$defaults = [];
+		$position = 10;
+
+		foreach ( self::get_orderable_template_components( $template_slug ) as $component ) {
+			$defaults[ $component ] = $position;
+			$position += 10;
+		}
+
+		return $defaults;
+	}
+
+	private function get_template_component_order_definitions( string $template_slug ): array {
+		$definitions = [];
+
+		foreach ( self::get_orderable_template_components( $template_slug ) as $component ) {
+			if ( 'breadcrumbs' === $component ) {
+				$definitions[ $component ] = __( 'Breadcrumbs', 'nova-bridge-suite' );
+				continue;
+			}
+
+			if ( 'service-page-3' === $template_slug && 'content' === $component ) {
+				$definitions[ $component ] = __( 'Main content + sidebar CTA', 'nova-bridge-suite' );
+				continue;
+			}
+
+			if ( isset( self::TEMPLATE_COMPONENT_LABELS[ $component ] ) ) {
+				$definitions[ $component ] = self::TEMPLATE_COMPONENT_LABELS[ $component ];
+			}
+		}
+
+		return $definitions;
+	}
+
+	private function get_template_component_order_settings( string $template_slug ): array {
+		$defaults = self::get_template_component_order_defaults_for_template( $template_slug );
+		$saved = \get_option( self::OPTION_TEMPLATE_COMPONENT_ORDER, [] );
+
+		if ( ! \is_array( $saved ) ) {
+			$saved = [];
+		}
+
+		$template_saved = $saved;
+
+		if ( isset( $saved[ $template_slug ] ) && \is_array( $saved[ $template_slug ] ) ) {
+			$template_saved = $saved[ $template_slug ];
+		}
+
+		$normalized = [];
+
+		foreach ( $defaults as $component => $default ) {
+			$raw = array_key_exists( $component, $template_saved ) ? \absint( $template_saved[ $component ] ) : (int) $default;
+			$normalized[ $component ] = max( 0, min( 9999, $raw ) );
+		}
+
+		return $normalized;
 	}
 
 	private function get_template_component_settings( string $template_slug ): array {
@@ -2818,6 +3356,10 @@ final class Plugin {
 			self::OPTION_COLOR_HERO_TEXT,
 			self::OPTION_COLOR_CTA_BG,
 			self::OPTION_COLOR_CTA_TEXT,
+			self::OPTION_COLOR_SIDEBAR_CTA_BG,
+			self::OPTION_COLOR_SIDEBAR_CTA_TEXT,
+			self::OPTION_COLOR_WIDE_CTA_BG,
+			self::OPTION_COLOR_WIDE_CTA_TEXT,
 			self::OPTION_COLOR_BUTTON_BG,
 			self::OPTION_COLOR_BUTTON_TEXT,
 			self::OPTION_COLOR_BUTTON_OUTLINE,
@@ -2891,6 +3433,61 @@ final class Plugin {
 		return $clean;
 	}
 
+	public static function sanitize_template_component_order_option( $value ): array {
+		if ( ! \is_array( $value ) ) {
+			return [];
+		}
+
+		$clean = [];
+		$templates = self::TEMPLATE_COMPONENTS;
+		$has_template_keys = false;
+
+		foreach ( array_keys( $templates ) as $template_slug ) {
+			if ( isset( $value[ $template_slug ] ) && \is_array( $value[ $template_slug ] ) ) {
+				$has_template_keys = true;
+				break;
+			}
+		}
+
+		if ( ! $has_template_keys ) {
+			$allowed = [ 'breadcrumbs' => true ];
+
+			foreach ( self::TEMPLATE_COMPONENT_LABELS as $component => $label ) {
+				$allowed[ $component ] = true;
+			}
+
+			foreach ( array_keys( $allowed ) as $component ) {
+				if ( array_key_exists( $component, $value ) ) {
+					$clean[ $component ] = max( 0, min( 9999, \absint( $value[ $component ] ) ) );
+				}
+			}
+
+			return $clean;
+		}
+
+		$stored = \get_option( self::OPTION_TEMPLATE_COMPONENT_ORDER, [] );
+
+		if ( ! \is_array( $stored ) ) {
+			$stored = [];
+		}
+
+		foreach ( array_keys( $templates ) as $template_slug ) {
+			$defaults = self::get_template_component_order_defaults_for_template( $template_slug );
+			$template_values = isset( $value[ $template_slug ] ) && \is_array( $value[ $template_slug ] )
+				? $value[ $template_slug ]
+				: ( isset( $stored[ $template_slug ] ) && \is_array( $stored[ $template_slug ] ) ? $stored[ $template_slug ] : [] );
+
+			$clean[ $template_slug ] = [];
+
+			foreach ( $defaults as $component => $default ) {
+				$raw = array_key_exists( $component, $template_values ) ? \absint( $template_values[ $component ] ) : (int) $default;
+				$clean[ $template_slug ][ $component ] = max( 0, min( 9999, $raw ) );
+			}
+		}
+
+		return $clean;
+	}
+
 	/**
 	 * Registers a simple meta box as a fallback editor for all fields.
 	 */
@@ -2910,6 +3507,7 @@ final class Plugin {
 		$meta = $this->get_meta_values( $post->ID );
 		$media_1 = $this->format_media( (int) $meta['sp_image_1'] );
 		$media_2 = $this->format_media( (int) $meta['sp_image_2'] );
+		$sidebar_media = $this->format_media( (int) $meta['sp_sidebar_image'] );
 		$table_text = $this->format_table_for_editor( $meta['sp_table'] );
 		$template_slug = $this->get_effective_template_slug( $post->ID );
 		$template_one = 'service-page-1-column' === $template_slug;
@@ -2979,7 +3577,8 @@ final class Plugin {
 					}
 					continue;
 				}
-				if ( '' !== \trim( (string) $value ) ) {
+				$text = \trim( (string) $value );
+				if ( '' !== $text && '0' !== $text ) {
 					return true;
 				}
 			}
@@ -3015,6 +3614,7 @@ final class Plugin {
 		$show_sidebar_cta_editor = ! $has_global_sidebar;
 		$show_wide_cta_editor = ! $has_global_wide;
 		$has_sidebar = $show_sidebar_cta_editor ? $section_has_content( [
+			$sidebar_media,
 			$meta['sp_sidebar_title'],
 			$meta['sp_sidebar_copy'],
 			$meta['sp_sidebar_primary_label'],
@@ -3143,6 +3743,37 @@ final class Plugin {
 				<summary><?php esc_html_e( 'Sidebar CTA (right column)', 'nova-bridge-suite' ); ?><span class="service-cpt-section-location"><?php esc_html_e( 'Side column', 'nova-bridge-suite' ); ?></span></summary>
 				<div class="service-cpt-section-body">
 					<div class="service-cpt-meta-grid">
+						<div class="service-cpt-meta-field">
+							<label><?php esc_html_e( 'Sidebar image', 'nova-bridge-suite' ); ?></label>
+							<input type="hidden" name="sp_sidebar_image" value="<?php echo esc_attr( (int) $sidebar_media['id'] ); ?>" class="service-cpt-section-field" />
+							<div id="sp_sidebar_image_preview" class="service-cpt-image-preview <?php echo $sidebar_media['url'] ? 'has-image' : 'is-empty'; ?>">
+								<img src="<?php echo esc_url( $sidebar_media['url'] ); ?>" alt="" />
+								<span class="service-cpt-image-placeholder"><?php esc_html_e( 'No image selected', 'nova-bridge-suite' ); ?></span>
+								<button
+									type="button"
+									class="service-cpt-media-remove service-cpt-image-remove"
+									data-target="sp_sidebar_image"
+									data-preview="#sp_sidebar_image_preview"
+									data-button="button.service-cpt-media-button[data-target='sp_sidebar_image']"
+									aria-label="<?php esc_attr_e( 'Remove sidebar image', 'nova-bridge-suite' ); ?>"
+									<?php disabled( ! $sidebar_media['id'] ); ?>
+								>
+									X
+								</button>
+							</div>
+							<div class="service-cpt-image-actions">
+								<button
+									type="button"
+									class="button service-cpt-media-button"
+									data-target="sp_sidebar_image"
+									data-preview="#sp_sidebar_image_preview"
+									data-select-label="<?php echo esc_attr__( 'Select sidebar image', 'nova-bridge-suite' ); ?>"
+									data-change-label="<?php echo esc_attr__( 'Change sidebar image', 'nova-bridge-suite' ); ?>"
+								>
+									<?php echo $sidebar_media['id'] ? esc_html__( 'Change sidebar image', 'nova-bridge-suite' ) : esc_html__( 'Select sidebar image', 'nova-bridge-suite' ); ?>
+								</button>
+							</div>
+						</div>
 						<?php
 						$field( __( 'Sidebar title (H3)', 'nova-bridge-suite' ), 'sp_sidebar_title', $meta['sp_sidebar_title'] );
 						$field( __( 'Sidebar copy', 'nova-bridge-suite' ), 'sp_sidebar_copy', $meta['sp_sidebar_copy'], 'richtext' );
@@ -3467,7 +4098,7 @@ final class Plugin {
 		\update_post_meta( $post_id, 'sp_related_posts', $meta['sp_related_posts'] );
 
 		// Images.
-		foreach ( [ 'sp_image_1', 'sp_image_2' ] as $image_field ) {
+		foreach ( [ 'sp_image_1', 'sp_image_2', 'sp_sidebar_image' ] as $image_field ) {
 			if ( isset( $_POST[ $image_field ] ) ) {
 				$meta[ $image_field ] = \absint( wp_unslash( $_POST[ $image_field ] ) );
 				\update_post_meta( $post_id, $image_field, $meta[ $image_field ] );
@@ -3508,9 +4139,11 @@ final class Plugin {
 	public function render_service_page( int $post_id ): string {
 		$post = \get_post( $post_id );
 		$template_slug = $this->get_effective_template_slug( $post_id );
+		$template_content = $this->get_template_content( $template_slug );
 		$wrap_style = $this->get_wrap_style_attribute( $template_slug );
+		$wrap_classes = $this->get_wrap_classes( $template_slug );
 
-		if ( $post && '' !== \trim( (string) $post->post_content ) ) {
+		if ( $post && ( '' !== \trim( $template_content ) || '' !== \trim( (string) $post->post_content ) ) ) {
 			$previous_post = $GLOBALS['post'] ?? null;
 			$GLOBALS['post'] = $post;
 			\setup_postdata( $post );
@@ -3537,10 +4170,16 @@ final class Plugin {
 			$this->table_used = false;
 
 			try {
-				$content_source = (string) $post->post_content;
+				$content_source = '' !== \trim( $template_content ) ? $template_content : (string) $post->post_content;
 				$blocks = \parse_blocks( $content_source );
+				$breadcrumbs = $this->render_breadcrumbs( $post_id );
 
 				if ( ! empty( $blocks ) ) {
+					if ( '' !== \trim( $breadcrumbs ) ) {
+						array_unshift( $blocks, $this->create_static_html_block( $breadcrumbs, 'breadcrumbs' ) );
+					}
+
+					$blocks = $this->prepare_template_blocks_for_render( $blocks, $template_slug );
 					$blocks = $this->add_component_classes_to_blocks( $blocks );
 					$content_source = (string) \serialize_blocks( $blocks );
 				}
@@ -3578,17 +4217,228 @@ final class Plugin {
 				\wp_reset_postdata();
 			}
 
-			return '<div class="service-cpt__wrap"' . $wrap_style . '>' . $content . '</div>';
+			return '<div class="' . \esc_attr( implode( ' ', $wrap_classes ) ) . '"' . $wrap_style . '>' . $content . '</div>';
 		}
 
 		return $this->render_legacy_layout( $post_id );
+	}
+
+	private function create_static_html_block( string $html, string $component ): array {
+		return [
+			'blockName'    => 'core/html',
+			'attrs'        => [
+				'serviceCptComponent' => \sanitize_key( $component ),
+			],
+			'innerBlocks'  => [],
+			'innerHTML'    => $html,
+			'innerContent' => [ $html ],
+		];
+	}
+
+	private function prepare_template_blocks_for_render( array $blocks, string $template_slug ): array {
+		$blocks = $this->promote_orderable_component_blocks( $blocks, $template_slug );
+
+		return $this->sort_template_block_units_by_order( $blocks, $template_slug );
+	}
+
+	private function promote_orderable_component_blocks( array $blocks, string $template_slug ): array {
+		$prepared = [];
+
+		foreach ( $blocks as $block ) {
+			if ( ! \is_array( $block ) ) {
+				$prepared[] = $block;
+				continue;
+			}
+
+			$component = $this->get_orderable_component_for_block( $block, $template_slug );
+			if ( '' !== $component ) {
+				$prepared[] = $block;
+				continue;
+			}
+
+			if ( $this->should_promote_orderable_children( $block, $template_slug ) ) {
+				$children = $this->promote_orderable_component_blocks( $block['innerBlocks'] ?? [], $template_slug );
+
+				if ( $this->block_list_has_orderable_component( $children, $template_slug ) ) {
+					foreach ( $children as $child ) {
+						$prepared[] = $child;
+					}
+					continue;
+				}
+			}
+
+			if ( ! empty( $block['innerBlocks'] ) && \is_array( $block['innerBlocks'] ) ) {
+				$block['innerBlocks'] = $this->promote_orderable_component_blocks( $block['innerBlocks'], $template_slug );
+			}
+
+			$prepared[] = $block;
+		}
+
+		return $prepared;
+	}
+
+	private function should_promote_orderable_children( array $block, string $template_slug ): bool {
+		if ( empty( $block['innerBlocks'] ) || ! \is_array( $block['innerBlocks'] ) ) {
+			return false;
+		}
+
+		$metadata = $block['attrs']['metadata']['name'] ?? '';
+		if ( \is_string( $metadata ) && in_array( $metadata, [ 'Header + intro', '2 column + H2' ], true ) ) {
+			return true;
+		}
+
+		return 'core/column' === ( $block['blockName'] ?? '' ) && $this->block_list_has_orderable_component( $block['innerBlocks'], $template_slug );
+	}
+
+	private function block_list_has_orderable_component( array $blocks, string $template_slug ): bool {
+		foreach ( $blocks as $block ) {
+			if ( ! \is_array( $block ) ) {
+				continue;
+			}
+
+			if ( '' !== $this->get_orderable_component_for_block( $block, $template_slug ) ) {
+				return true;
+			}
+
+			if ( ! empty( $block['innerBlocks'] ) && \is_array( $block['innerBlocks'] ) && $this->block_list_has_orderable_component( $block['innerBlocks'], $template_slug ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function sort_template_block_units_by_order( array $blocks, string $template_slug ): array {
+		$order = $this->get_template_component_order_settings( $template_slug );
+		$units = [];
+		$current = null;
+
+		foreach ( $blocks as $index => $block ) {
+			$component = \is_array( $block ) ? $this->get_orderable_component_for_block( $block, $template_slug ) : '';
+
+			if ( '' !== $component ) {
+				if ( null !== $current ) {
+					$units[] = $current;
+				}
+
+				$current = [
+					'component' => $component,
+					'index'     => $index,
+					'blocks'    => [ $block ],
+				];
+				continue;
+			}
+
+			if ( null !== $current ) {
+				$current['blocks'][] = $block;
+				continue;
+			}
+
+			$units[] = [
+				'component' => '',
+				'index'     => $index,
+				'blocks'    => [ $block ],
+			];
+		}
+
+		if ( null !== $current ) {
+			$units[] = $current;
+		}
+
+		usort(
+			$units,
+			static function ( array $left, array $right ) use ( $order ): int {
+				$left_component = (string) ( $left['component'] ?? '' );
+				$right_component = (string) ( $right['component'] ?? '' );
+				$left_order = '' !== $left_component && isset( $order[ $left_component ] ) ? (int) $order[ $left_component ] : 10000 + (int) ( $left['index'] ?? 0 );
+				$right_order = '' !== $right_component && isset( $order[ $right_component ] ) ? (int) $order[ $right_component ] : 10000 + (int) ( $right['index'] ?? 0 );
+
+				if ( $left_order === $right_order ) {
+					return (int) ( $left['index'] ?? 0 ) <=> (int) ( $right['index'] ?? 0 );
+				}
+
+				return $left_order <=> $right_order;
+			}
+		);
+
+		$sorted = [];
+		foreach ( $units as $unit ) {
+			foreach ( (array) ( $unit['blocks'] ?? [] ) as $block ) {
+				$sorted[] = $block;
+			}
+		}
+
+		return $sorted;
+	}
+
+	private function get_orderable_component_for_block( array $block, string $template_slug ): string {
+		$component = $this->get_component_slug_for_block( $block );
+
+		if ( ! \is_string( $component ) || '' === $component ) {
+			return '';
+		}
+
+		$definitions = $this->get_template_component_order_definitions( $template_slug );
+
+		return isset( $definitions[ $component ] ) ? $component : '';
+	}
+
+	private function render_breadcrumbs( int $post_id = 0 ): string {
+		$type_object = \get_post_type_object( self::CPT );
+		$archive_label = $type_object ? (string) $type_object->labels->name : __( 'Services', 'nova-bridge-suite' );
+		$archive_url = \get_post_type_archive_link( self::CPT );
+		$items = [
+			[
+				'label' => __( 'Home', 'nova-bridge-suite' ),
+				'url'   => \home_url( '/' ),
+			],
+		];
+
+		if ( $post_id > 0 && $archive_url ) {
+			$items[] = [
+				'label' => $archive_label,
+				'url'   => $archive_url,
+			];
+			$items[] = [
+				'label' => \get_the_title( $post_id ),
+				'url'   => '',
+			];
+		} else {
+			$items[] = [
+				'label' => $archive_label,
+				'url'   => '',
+			];
+		}
+
+		ob_start();
+		?>
+		<nav class="service-cpt-breadcrumbs" aria-label="<?php esc_attr_e( 'Breadcrumbs', 'nova-bridge-suite' ); ?>">
+			<ol class="service-cpt-breadcrumbs__list">
+				<?php foreach ( $items as $index => $item ) : ?>
+					<?php $is_last = count( $items ) - 1 === $index; ?>
+					<li class="service-cpt-breadcrumbs__item">
+						<?php if ( ! $is_last && '' !== (string) $item['url'] ) : ?>
+							<a href="<?php echo esc_url( (string) $item['url'] ); ?>"><?php echo esc_html( (string) $item['label'] ); ?></a>
+						<?php else : ?>
+							<span aria-current="page"><?php echo esc_html( (string) $item['label'] ); ?></span>
+						<?php endif; ?>
+					</li>
+				<?php endforeach; ?>
+			</ol>
+		</nav>
+		<?php
+
+		return (string) ob_get_clean();
 	}
 
 	/**
 	 * Renders the archive page layout.
 	 */
 	public function render_archive_page(): string {
-		$wrap_style = $this->get_wrap_style_attribute( $this->get_selected_template_slug() );
+		$template_slug = $this->get_selected_template_slug();
+		$wrap_style = $this->get_wrap_style_attribute( $template_slug );
+		$wrap_classes = $this->get_wrap_classes( $template_slug );
+		$wrap_classes[] = 'service-cpt-archive';
 		$type_object = \get_post_type_object( self::CPT );
 		$default_title = $type_object ? (string) $type_object->labels->name : __( 'Services', 'nova-bridge-suite' );
 
@@ -3633,7 +4483,7 @@ final class Plugin {
 		$highlight_one_has = '' !== \trim( $highlight_one_copy ) || '' !== \trim( (string) $highlight_one_media['url'] );
 		$highlight_two_has = '' !== \trim( $highlight_two_copy ) || '' !== \trim( (string) $highlight_two_media['url'] );
 		$has_highlights = '' !== \trim( $highlights_heading ) || $highlight_one_has || $highlight_two_has;
-		$has_cta = $this->cta_has_content( $cta );
+		$has_cta = $this->wide_cta_has_displayable_content( $cta );
 		$has_faq = ! empty( $faq_items );
 		$has_related = ! empty( $related_posts );
 
@@ -3674,7 +4524,8 @@ final class Plugin {
 
 		ob_start();
 		?>
-		<div class="service-cpt__wrap service-cpt-archive"<?php echo $wrap_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+		<div class="<?php echo esc_attr( implode( ' ', array_unique( $wrap_classes ) ) ); ?>"<?php echo $wrap_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+			<?php echo $this->render_breadcrumbs(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<section class="service-cpt-archive__section service-cpt-archive__section--hero">
 				<div class="service-cpt-archive__inner">
 					<?php if ( '' !== \trim( $hero_eyebrow ) ) : ?>
@@ -3747,7 +4598,7 @@ final class Plugin {
 											<?php endif; ?>
 											<div class="service-cpt-archive__card-body">
 												<h3 class="wp-block-heading service-cpt-archive__card-title"><?php the_title(); ?></h3>
-												<p class="service-cpt-archive__card-excerpt"><?php echo esc_html( \wp_trim_words( \get_the_excerpt( $service_post ), 18 ) ); ?></p>
+												<p class="service-cpt-archive__card-excerpt"><?php echo esc_html( $this->get_service_archive_excerpt( (int) $service_post->ID ) ); ?></p>
 												<?php if ( '' !== \trim( $card_cta_label ) ) : ?>
 													<span class="service-cpt-archive__card-cta"><?php echo esc_html( $card_cta_label ); ?></span>
 												<?php endif; ?>
@@ -3891,10 +4742,12 @@ final class Plugin {
 
 		$template_slug = $this->get_effective_template_slug( $post_id );
 		$wrap_style = $this->get_wrap_style_attribute( $template_slug );
+		$wrap_classes = $this->get_wrap_classes( $template_slug );
 
 		ob_start();
 		?>
-		<div class="service-cpt__wrap"<?php echo $wrap_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+		<div class="<?php echo esc_attr( implode( ' ', $wrap_classes ) ); ?>"<?php echo $wrap_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+			<?php echo $this->render_breadcrumbs( $post_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php if ( $this->component_enabled( 'hero' ) ) : ?>
 				<section class="service-cpt__hero">
 					<div class="service-cpt__hero-inner">
@@ -3990,9 +4843,10 @@ final class Plugin {
 						<?php endif; ?>
 					</div>
 
-					<?php if ( $this->component_enabled( 'sidebar_cta' ) && ( $sidebar_cta['title'] || $sidebar_cta['copy'] ) ) : ?>
+					<?php if ( $this->component_enabled( 'sidebar_cta' ) && $this->sidebar_cta_has_displayable_content( $sidebar_cta ) ) : ?>
 						<aside class="service-cpt__sidebar">
 							<div class="service-cpt__card">
+								<?php echo $this->render_sidebar_cta_image( $sidebar_cta ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 								<?php if ( $sidebar_cta['title'] ) : ?>
 									<h3><?php echo esc_html( $sidebar_cta['title'] ); ?></h3>
 								<?php endif; ?>
@@ -4017,7 +4871,7 @@ final class Plugin {
 				</section>
 			<?php endif; ?>
 
-			<?php if ( $this->component_enabled( 'wide_cta' ) && ( $wide_cta['title'] || ! empty( $wide_cta['bullets'] ) ) ) : ?>
+			<?php if ( $this->component_enabled( 'wide_cta' ) && $this->wide_cta_has_displayable_content( $wide_cta ) ) : ?>
 				<section class="service-cpt__section service-cpt__cta-wide">
 					<div class="service-cpt__cta-inner">
 						<?php if ( $wide_cta['title'] ) : ?>
@@ -4371,8 +5225,13 @@ final class Plugin {
 		];
 	}
 
+	private function get_global_hero_background_image(): array {
+		return $this->format_media( (int) \get_option( self::OPTION_GLOBAL_HERO_BACKGROUND_IMAGE, 0 ) );
+	}
+
 	private function get_global_sidebar_cta(): array {
 		return [
+			'image'           => $this->format_media( (int) \get_option( self::OPTION_GLOBAL_SIDEBAR_IMAGE, 0 ) ),
 			'title'           => $this->get_global_text_option( self::OPTION_GLOBAL_SIDEBAR_TITLE ),
 			'copy'            => $this->get_global_textarea_option( self::OPTION_GLOBAL_SIDEBAR_COPY ),
 			'primary_label'   => $this->get_global_text_option( self::OPTION_GLOBAL_SIDEBAR_PRIMARY_LABEL ),
@@ -4461,13 +5320,14 @@ final class Plugin {
 	private function cta_has_content( array $cta ): bool {
 		foreach ( $cta as $value ) {
 			if ( \is_array( $value ) ) {
-				if ( ! empty( $value ) ) {
+				if ( $this->cta_has_content( $value ) ) {
 					return true;
 				}
 				continue;
 			}
 
-			if ( '' !== \trim( (string) $value ) ) {
+			$text = \trim( (string) $value );
+			if ( '' !== $text && '0' !== $text ) {
 				return true;
 			}
 		}
@@ -4475,8 +5335,38 @@ final class Plugin {
 		return false;
 	}
 
+	private function cta_media_has_content( array $media ): bool {
+		return (int) ( $media['id'] ?? 0 ) > 0 || '' !== \trim( (string) ( $media['url'] ?? '' ) );
+	}
+
+	private function cta_link_has_content( array $cta, string $label_key, string $url_key ): bool {
+		return '' !== \trim( (string) ( $cta[ $label_key ] ?? '' ) )
+			&& '' !== \trim( (string) ( $cta[ $url_key ] ?? '' ) );
+	}
+
+	private function sidebar_cta_has_displayable_content( array $cta ): bool {
+		$image = $cta['image'] ?? [];
+
+		return ( \is_array( $image ) && $this->cta_media_has_content( $image ) )
+			|| '' !== \trim( (string) ( $cta['title'] ?? '' ) )
+			|| '' !== \trim( (string) \wp_strip_all_tags( (string) ( $cta['copy'] ?? '' ) ) )
+			|| $this->cta_link_has_content( $cta, 'primary_label', 'primary_url' )
+			|| $this->cta_link_has_content( $cta, 'secondary_label', 'secondary_url' );
+	}
+
+	private function wide_cta_has_displayable_content( array $cta ): bool {
+		$bullets = $cta['bullets'] ?? [];
+		$bullets = \is_array( $bullets ) ? self::sanitize_string_array( $bullets ) : [];
+
+		return '' !== \trim( (string) ( $cta['title'] ?? '' ) )
+			|| ! empty( $bullets )
+			|| $this->cta_link_has_content( $cta, 'button_label', 'button_url' )
+			|| $this->cta_link_has_content( $cta, 'more_text', 'more_url' );
+	}
+
 	private function build_sidebar_cta_from_meta( array $meta ): array {
 		return [
+			'image'           => $this->format_media( (int) ( $meta['sp_sidebar_image'] ?? 0 ) ),
 			'title'           => (string) ( $meta['sp_sidebar_title'] ?? '' ),
 			'copy'            => (string) ( $meta['sp_sidebar_copy'] ?? '' ),
 			'primary_label'   => (string) ( $meta['sp_sidebar_primary_label'] ?? '' ),
@@ -4520,12 +5410,17 @@ final class Plugin {
 
 	private function get_effective_sidebar_cta( array $meta ): array {
 		$global = $this->get_global_sidebar_cta();
+		$local  = $this->build_sidebar_cta_from_meta( $meta );
 
 		if ( $this->cta_has_content( $global ) ) {
+			if ( $this->cta_media_has_content( $local['image'] ?? [] ) ) {
+				$global['image'] = $local['image'];
+			}
+
 			return $global;
 		}
 
-		return $this->build_sidebar_cta_from_meta( $meta );
+		return $local;
 	}
 
 	private function get_effective_wide_cta( array $meta ): array {
@@ -4572,6 +5467,50 @@ final class Plugin {
 			'service-cpt',
 			[ $this, 'render_settings_page' ]
 		);
+	}
+
+	public function redirect_all_language_admin_scope(): void {
+		if ( ! \is_admin() || \wp_doing_ajax() ) {
+			return;
+		}
+
+		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+			return;
+		}
+
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? \strtoupper( (string) \wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : 'GET';
+
+		if ( 'GET' !== $method ) {
+			return;
+		}
+
+		$language = isset( $_GET['lang'] ) && \is_scalar( $_GET['lang'] )
+			? \sanitize_key( (string) \wp_unslash( $_GET['lang'] ) )
+			: '';
+
+		if ( ! \in_array( $language, [ 'all', 'all_languages' ], true ) ) {
+			return;
+		}
+
+		$post_type = isset( $_GET['post_type'] ) && \is_scalar( $_GET['post_type'] )
+			? \sanitize_key( (string) \wp_unslash( $_GET['post_type'] ) )
+			: '';
+		$page = isset( $_GET['page'] ) && \is_scalar( $_GET['page'] )
+			? \sanitize_key( (string) \wp_unslash( $_GET['page'] ) )
+			: '';
+
+		if ( self::CPT !== $post_type && 'service-cpt' !== $page ) {
+			return;
+		}
+
+		$target = \remove_query_arg( 'lang' );
+
+		if ( '' === $target ) {
+			return;
+		}
+
+		\wp_safe_redirect( $target );
+		exit;
 	}
 
 	/**
@@ -4632,6 +5571,18 @@ final class Plugin {
 			'sanitize_callback' => [ $this, 'sanitize_color_value' ],
 		] );
 		\register_setting( 'service-cpt', self::OPTION_COLOR_CTA_TEXT, [
+			'sanitize_callback' => [ $this, 'sanitize_color_value' ],
+		] );
+		\register_setting( 'service-cpt', self::OPTION_COLOR_SIDEBAR_CTA_BG, [
+			'sanitize_callback' => [ $this, 'sanitize_color_value' ],
+		] );
+		\register_setting( 'service-cpt', self::OPTION_COLOR_SIDEBAR_CTA_TEXT, [
+			'sanitize_callback' => [ $this, 'sanitize_color_value' ],
+		] );
+		\register_setting( 'service-cpt', self::OPTION_COLOR_WIDE_CTA_BG, [
+			'sanitize_callback' => [ $this, 'sanitize_color_value' ],
+		] );
+		\register_setting( 'service-cpt', self::OPTION_COLOR_WIDE_CTA_TEXT, [
 			'sanitize_callback' => [ $this, 'sanitize_color_value' ],
 		] );
 		\register_setting( 'service-cpt', self::OPTION_COLOR_BUTTON_BG, [
@@ -4696,11 +5647,18 @@ final class Plugin {
 		\register_setting( 'service-cpt', self::OPTION_TEMPLATE_COMPONENTS, [
 			'sanitize_callback' => [ self::class, 'sanitize_template_components_option' ],
 		] );
+		\register_setting( 'service-cpt', self::OPTION_TEMPLATE_COMPONENT_ORDER, [
+			'sanitize_callback' => [ self::class, 'sanitize_template_component_order_option' ],
+		] );
 		\register_setting( 'service-cpt', self::OPTION_LABEL_FAQ, [
 			'sanitize_callback' => 'sanitize_text_field',
 		] );
 		\register_setting( 'service-cpt', self::OPTION_LABEL_RELATED, [
 			'sanitize_callback' => 'sanitize_text_field',
+		] );
+		\register_setting( 'service-cpt', self::OPTION_LABEL_LANGUAGE, [
+			'sanitize_callback' => [ $this, 'sanitize_label_language_option' ],
+			'default'           => self::DEFAULT_LABEL_LANGUAGE,
 		] );
 		\register_setting( 'service-cpt', self::OPTION_GLOBAL_HERO_PRIMARY_LABEL, [
 			'sanitize_callback' => 'sanitize_text_field',
@@ -4714,11 +5672,17 @@ final class Plugin {
 		\register_setting( 'service-cpt', self::OPTION_GLOBAL_HERO_SECONDARY_URL, [
 			'sanitize_callback' => 'esc_url_raw',
 		] );
+		\register_setting( 'service-cpt', self::OPTION_GLOBAL_HERO_BACKGROUND_IMAGE, [
+			'sanitize_callback' => 'absint',
+		] );
 		\register_setting( 'service-cpt', self::OPTION_GLOBAL_SIDEBAR_TITLE, [
 			'sanitize_callback' => 'sanitize_text_field',
 		] );
 		\register_setting( 'service-cpt', self::OPTION_GLOBAL_SIDEBAR_COPY, [
 			'sanitize_callback' => 'wp_kses_post',
+		] );
+		\register_setting( 'service-cpt', self::OPTION_GLOBAL_SIDEBAR_IMAGE, [
+			'sanitize_callback' => 'absint',
 		] );
 		\register_setting( 'service-cpt', self::OPTION_GLOBAL_SIDEBAR_PRIMARY_LABEL, [
 			'sanitize_callback' => 'sanitize_text_field',
@@ -4865,6 +5829,10 @@ final class Plugin {
 					self::OPTION_COLOR_HERO_TEXT         => '#F8FAFC',
 					self::OPTION_COLOR_CTA_BG            => '#111827',
 					self::OPTION_COLOR_CTA_TEXT          => '#F8FAFC',
+					self::OPTION_COLOR_SIDEBAR_CTA_BG    => '#111827',
+					self::OPTION_COLOR_SIDEBAR_CTA_TEXT  => '#F8FAFC',
+					self::OPTION_COLOR_WIDE_CTA_BG       => '#111827',
+					self::OPTION_COLOR_WIDE_CTA_TEXT     => '#F8FAFC',
 					self::OPTION_COLOR_BUTTON_BG         => '#2563EB',
 					self::OPTION_COLOR_BUTTON_TEXT       => '#FFFFFF',
 					self::OPTION_COLOR_BUTTON_OUTLINE    => '#2563EB',
@@ -4891,6 +5859,10 @@ final class Plugin {
 					self::OPTION_COLOR_HERO_TEXT         => '#F8FAFC',
 					self::OPTION_COLOR_CTA_BG            => '#1F2937',
 					self::OPTION_COLOR_CTA_TEXT          => '#F8FAFC',
+					self::OPTION_COLOR_SIDEBAR_CTA_BG    => '#1F2937',
+					self::OPTION_COLOR_SIDEBAR_CTA_TEXT  => '#F8FAFC',
+					self::OPTION_COLOR_WIDE_CTA_BG       => '#1F2937',
+					self::OPTION_COLOR_WIDE_CTA_TEXT     => '#F8FAFC',
 					self::OPTION_COLOR_BUTTON_BG         => '#F59E0B',
 					self::OPTION_COLOR_BUTTON_TEXT       => '#0F172A',
 					self::OPTION_COLOR_BUTTON_OUTLINE    => '#F59E0B',
@@ -4917,6 +5889,10 @@ final class Plugin {
 					self::OPTION_COLOR_HERO_TEXT         => '#0F172A',
 					self::OPTION_COLOR_CTA_BG            => '#EAF2FF',
 					self::OPTION_COLOR_CTA_TEXT          => '#0F172A',
+					self::OPTION_COLOR_SIDEBAR_CTA_BG    => '#EAF2FF',
+					self::OPTION_COLOR_SIDEBAR_CTA_TEXT  => '#0F172A',
+					self::OPTION_COLOR_WIDE_CTA_BG       => '#EAF2FF',
+					self::OPTION_COLOR_WIDE_CTA_TEXT     => '#0F172A',
 					self::OPTION_COLOR_BUTTON_BG         => '#FFFFFF',
 					self::OPTION_COLOR_BUTTON_TEXT       => '#111827',
 					self::OPTION_COLOR_BUTTON_OUTLINE    => '#111827',
@@ -4928,6 +5904,36 @@ final class Plugin {
 					self::OPTION_COLOR_TABS_INACTIVE_BG  => '#F3F4F6',
 					self::OPTION_COLOR_TABS_INACTIVE_TEXT => '#111827',
 					self::OPTION_COLOR_TABS_BORDER       => '#E5E7EB',
+				],
+			],
+			'transparent-outline' => [
+				'label'  => __( 'Transparent Outline', 'nova-bridge-suite' ),
+				'values' => [
+					self::OPTION_COLOR_PRIMARY           => '#111827',
+					self::OPTION_COLOR_CONTRAST          => '#FFFFFF',
+					self::OPTION_COLOR_SURFACE           => '#FFFFFF',
+					self::OPTION_COLOR_TEXT              => '#111827',
+					self::OPTION_COLOR_ACCENT            => '#2563EB',
+					self::OPTION_COLOR_BORDER            => '#CBD5E1',
+					self::OPTION_COLOR_HERO_BG           => 'transparent',
+					self::OPTION_COLOR_HERO_TEXT         => '#111827',
+					self::OPTION_COLOR_CTA_BG            => 'transparent',
+					self::OPTION_COLOR_CTA_TEXT          => '#111827',
+					self::OPTION_COLOR_SIDEBAR_CTA_BG    => 'transparent',
+					self::OPTION_COLOR_SIDEBAR_CTA_TEXT  => '#111827',
+					self::OPTION_COLOR_WIDE_CTA_BG       => 'transparent',
+					self::OPTION_COLOR_WIDE_CTA_TEXT     => '#111827',
+					self::OPTION_COLOR_BUTTON_BG         => '#111827',
+					self::OPTION_COLOR_BUTTON_TEXT       => '#FFFFFF',
+					self::OPTION_COLOR_BUTTON_OUTLINE    => '#111827',
+					self::OPTION_COLOR_FAQ_BG            => '#F8FAFC',
+					self::OPTION_COLOR_FAQ_QUESTION      => '#111827',
+					self::OPTION_COLOR_FAQ_ANSWER        => '#475569',
+					self::OPTION_COLOR_TABS_ACTIVE_BG    => '#111827',
+					self::OPTION_COLOR_TABS_ACTIVE_TEXT  => '#FFFFFF',
+					self::OPTION_COLOR_TABS_INACTIVE_BG  => 'transparent',
+					self::OPTION_COLOR_TABS_INACTIVE_TEXT => '#111827',
+					self::OPTION_COLOR_TABS_BORDER       => '#CBD5E1',
 				],
 			],
 			'tech-cyan' => [
@@ -4943,6 +5949,10 @@ final class Plugin {
 					self::OPTION_COLOR_HERO_TEXT         => '#E2E8F0',
 					self::OPTION_COLOR_CTA_BG            => '#111827',
 					self::OPTION_COLOR_CTA_TEXT          => '#E2E8F0',
+					self::OPTION_COLOR_SIDEBAR_CTA_BG    => '#111827',
+					self::OPTION_COLOR_SIDEBAR_CTA_TEXT  => '#E2E8F0',
+					self::OPTION_COLOR_WIDE_CTA_BG       => '#111827',
+					self::OPTION_COLOR_WIDE_CTA_TEXT     => '#E2E8F0',
 					self::OPTION_COLOR_BUTTON_BG         => '#22D3EE',
 					self::OPTION_COLOR_BUTTON_TEXT       => '#0B1220',
 					self::OPTION_COLOR_BUTTON_OUTLINE    => '#22D3EE',
@@ -4969,6 +5979,10 @@ final class Plugin {
 					self::OPTION_COLOR_HERO_TEXT         => '#FFF7ED',
 					self::OPTION_COLOR_CTA_BG            => '#FDEAD7',
 					self::OPTION_COLOR_CTA_TEXT          => '#3F2A1D',
+					self::OPTION_COLOR_SIDEBAR_CTA_BG    => '#FDEAD7',
+					self::OPTION_COLOR_SIDEBAR_CTA_TEXT  => '#3F2A1D',
+					self::OPTION_COLOR_WIDE_CTA_BG       => '#FDEAD7',
+					self::OPTION_COLOR_WIDE_CTA_TEXT     => '#3F2A1D',
 					self::OPTION_COLOR_BUTTON_BG         => '#D97706',
 					self::OPTION_COLOR_BUTTON_TEXT       => '#FFFFFF',
 					self::OPTION_COLOR_BUTTON_OUTLINE    => '#D97706',
@@ -5047,10 +6061,15 @@ final class Plugin {
 		$settings_payload = $this->get_settings_payload();
 		$color_presets = $settings_payload['colorPresets'] ?? [];
 		$spacing_presets = $settings_payload['spacingPresets'] ?? [];
+		$label_language = $this->get_selected_label_language();
+		$label_language_effective = $this->get_effective_label_language();
+		$label_languages = $this->get_label_language_options();
 		$faq_label = $this->get_faq_heading_label();
 		$related_label = $this->get_related_heading_label();
 		$global_hero = $this->get_global_hero_cta();
+		$global_hero_background_image = $this->get_global_hero_background_image();
 		$global_sidebar = $this->get_global_sidebar_cta();
+		$global_sidebar_image = $global_sidebar['image'] ?? $this->format_media( 0 );
 		$global_wide = $this->get_global_wide_cta();
 		$global_wide_bullet_1 = $this->get_global_text_option( self::OPTION_GLOBAL_CTA_BULLET_1 );
 		$global_wide_bullet_2 = $this->get_global_text_option( self::OPTION_GLOBAL_CTA_BULLET_2 );
@@ -5126,8 +6145,12 @@ final class Plugin {
 				self::OPTION_COLOR_HERO_TEXT => __( 'Hero text', 'nova-bridge-suite' ),
 			],
 			__( 'CTA', 'nova-bridge-suite' ) => [
-				self::OPTION_COLOR_CTA_BG   => __( 'CTA background', 'nova-bridge-suite' ),
-				self::OPTION_COLOR_CTA_TEXT => __( 'CTA text', 'nova-bridge-suite' ),
+				self::OPTION_COLOR_CTA_BG           => __( 'Default CTA background', 'nova-bridge-suite' ),
+				self::OPTION_COLOR_CTA_TEXT         => __( 'Default CTA text', 'nova-bridge-suite' ),
+				self::OPTION_COLOR_SIDEBAR_CTA_BG   => __( 'Sidebar CTA background', 'nova-bridge-suite' ),
+				self::OPTION_COLOR_SIDEBAR_CTA_TEXT => __( 'Sidebar CTA text', 'nova-bridge-suite' ),
+				self::OPTION_COLOR_WIDE_CTA_BG      => __( 'Wide CTA background', 'nova-bridge-suite' ),
+				self::OPTION_COLOR_WIDE_CTA_TEXT    => __( 'Wide CTA text', 'nova-bridge-suite' ),
 			],
 			__( 'Buttons', 'nova-bridge-suite' ) => [
 				self::OPTION_COLOR_BUTTON_BG      => __( 'Button background', 'nova-bridge-suite' ),
@@ -5279,6 +6302,27 @@ final class Plugin {
 							</td>
 						</tr>
 						<tr>
+							<th scope="row"><label for="service-cpt-label-language"><?php esc_html_e( 'Generic label language', 'nova-bridge-suite' ); ?></label></th>
+							<td>
+								<select name="<?php echo esc_attr( self::OPTION_LABEL_LANGUAGE ); ?>" id="service-cpt-label-language">
+									<?php foreach ( $label_languages as $language_key => $language_label ) : ?>
+										<option value="<?php echo esc_attr( $language_key ); ?>" <?php selected( $label_language, $language_key ); ?>>
+											<?php echo esc_html( $language_label ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+								<p class="description">
+									<?php
+									printf(
+										/* translators: %s: language code. */
+										esc_html__( 'Auto currently resolves to %s and is used for default FAQ, related articles, archive read-more, and archive services CTA labels until those fields are customized.', 'nova-bridge-suite' ),
+										esc_html( strtoupper( $label_language_effective ) )
+									);
+									?>
+								</p>
+							</td>
+						</tr>
+						<tr>
 							<th scope="row"><?php esc_html_e( 'FAQ heading label (H3)', 'nova-bridge-suite' ); ?></th>
 							<td>
 								<input type="text" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_LABEL_FAQ ) ); ?>" value="<?php echo esc_attr( $faq_label ); ?>" class="regular-text" />
@@ -5345,6 +6389,44 @@ final class Plugin {
 						<p class="description">
 							<?php esc_html_e( 'Accepts hex colors or CSS variables (e.g. var(--wp--preset--color--primary)).', 'nova-bridge-suite' ); ?>
 						</p>
+					</details>
+
+					<details class="service-cpt-subpanel">
+						<summary><?php esc_html_e( 'Hero background image', 'nova-bridge-suite' ); ?></summary>
+						<div class="service-cpt-field">
+							<span class="service-cpt-field-label"><?php esc_html_e( 'Image', 'nova-bridge-suite' ); ?></span>
+							<input type="hidden" name="<?php echo esc_attr( self::OPTION_GLOBAL_HERO_BACKGROUND_IMAGE ); ?>" value="<?php echo esc_attr( (int) $global_hero_background_image['id'] ); ?>" />
+							<div id="service_cpt_global_hero_background_image_preview" class="service-cpt-image-preview <?php echo $global_hero_background_image['url'] ? 'has-image' : 'is-empty'; ?>">
+								<img src="<?php echo esc_url( $global_hero_background_image['url'] ); ?>" alt="" />
+								<span class="service-cpt-image-placeholder"><?php esc_html_e( 'No image selected', 'nova-bridge-suite' ); ?></span>
+								<button
+									type="button"
+									class="service-cpt-media-remove service-cpt-image-remove"
+									data-target="<?php echo esc_attr( self::OPTION_GLOBAL_HERO_BACKGROUND_IMAGE ); ?>"
+									data-preview="#service_cpt_global_hero_background_image_preview"
+									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( self::OPTION_GLOBAL_HERO_BACKGROUND_IMAGE ); ?>']"
+									aria-label="<?php esc_attr_e( 'Remove hero background image', 'nova-bridge-suite' ); ?>"
+									<?php disabled( ! $global_hero_background_image['id'] ); ?>
+								>
+									X
+								</button>
+							</div>
+							<div class="service-cpt-image-actions">
+								<button
+									type="button"
+									class="button service-cpt-media-button"
+									data-target="<?php echo esc_attr( self::OPTION_GLOBAL_HERO_BACKGROUND_IMAGE ); ?>"
+									data-preview="#service_cpt_global_hero_background_image_preview"
+									data-title="<?php echo esc_attr__( 'Select hero background image', 'nova-bridge-suite' ); ?>"
+									data-button="<?php echo esc_attr__( 'Use hero image', 'nova-bridge-suite' ); ?>"
+									data-select-label="<?php echo esc_attr__( 'Select hero image', 'nova-bridge-suite' ); ?>"
+									data-change-label="<?php echo esc_attr__( 'Change hero image', 'nova-bridge-suite' ); ?>"
+								>
+									<?php echo $global_hero_background_image['id'] ? esc_html__( 'Change hero image', 'nova-bridge-suite' ) : esc_html__( 'Select hero image', 'nova-bridge-suite' ); ?>
+								</button>
+							</div>
+							<p class="description"><?php esc_html_e( 'Used behind Service CPT hero sections with responsive cover cropping. The hero background color remains as the fallback.', 'nova-bridge-suite' ); ?></p>
+						</div>
 					</details>
 
 					<details class="service-cpt-subpanel">
@@ -5487,6 +6569,38 @@ final class Plugin {
 
 					<details class="service-cpt-subpanel">
 						<summary><?php esc_html_e( 'Sidebar CTA', 'nova-bridge-suite' ); ?></summary>
+						<div class="service-cpt-field">
+							<span class="service-cpt-field-label"><?php esc_html_e( 'Image', 'nova-bridge-suite' ); ?></span>
+							<input type="hidden" name="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_IMAGE ) ); ?>" value="<?php echo esc_attr( (int) $global_sidebar_image['id'] ); ?>" />
+							<div id="service_cpt_global_sidebar_image_preview" class="service-cpt-image-preview <?php echo $global_sidebar_image['url'] ? 'has-image' : 'is-empty'; ?>">
+								<img src="<?php echo esc_url( $global_sidebar_image['url'] ); ?>" alt="" />
+								<span class="service-cpt-image-placeholder"><?php esc_html_e( 'No image selected', 'nova-bridge-suite' ); ?></span>
+								<button
+									type="button"
+									class="service-cpt-media-remove service-cpt-image-remove"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_IMAGE ) ); ?>"
+									data-preview="#service_cpt_global_sidebar_image_preview"
+									data-button="button.service-cpt-media-button[data-target='<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_IMAGE ) ); ?>']"
+									aria-label="<?php esc_attr_e( 'Remove sidebar CTA image', 'nova-bridge-suite' ); ?>"
+									<?php disabled( ! $global_sidebar_image['id'] ); ?>
+								>
+									X
+								</button>
+							</div>
+							<div class="service-cpt-image-actions">
+								<button
+									type="button"
+									class="button service-cpt-media-button"
+									data-target="<?php echo esc_attr( $this->get_settings_option_name( self::OPTION_GLOBAL_SIDEBAR_IMAGE ) ); ?>"
+									data-preview="#service_cpt_global_sidebar_image_preview"
+									data-select-label="<?php echo esc_attr__( 'Select sidebar image', 'nova-bridge-suite' ); ?>"
+									data-change-label="<?php echo esc_attr__( 'Change sidebar image', 'nova-bridge-suite' ); ?>"
+								>
+									<?php echo $global_sidebar_image['id'] ? esc_html__( 'Change sidebar image', 'nova-bridge-suite' ) : esc_html__( 'Select sidebar image', 'nova-bridge-suite' ); ?>
+								</button>
+							</div>
+							<p class="description"><?php esc_html_e( 'Shown above the sidebar CTA copy and cropped responsively.', 'nova-bridge-suite' ); ?></p>
+						</div>
 						<div class="service-cpt-field">
 							<span class="service-cpt-field-label"><?php esc_html_e( 'Title', 'nova-bridge-suite' ); ?></span>
 							<input
@@ -6161,7 +7275,26 @@ final class Plugin {
 					<?php
 					$definitions = $this->get_template_component_definitions( $selected_template );
 					$settings = $this->get_template_component_settings( $selected_template );
+					$order_definitions = $this->get_template_component_order_definitions( $selected_template );
+					$order_settings = $this->get_template_component_order_settings( $selected_template );
+					$order_keys = array_keys( $order_definitions );
 					$template_label = $templates[ $selected_template ]['label'] ?? $selected_template;
+					usort(
+						$order_keys,
+						static function ( string $left_key, string $right_key ) use ( $order_settings, $order_definitions ): int {
+							$left = (int) ( $order_settings[ $left_key ] ?? 0 );
+							$right = (int) ( $order_settings[ $right_key ] ?? 0 );
+
+							if ( $left === $right ) {
+								return strcmp(
+									(string) ( $order_definitions[ $left_key ] ?? $left_key ),
+									(string) ( $order_definitions[ $right_key ] ?? $right_key )
+								);
+							}
+
+							return $left <=> $right;
+						}
+					);
 					?>
 					<div class="service-cpt-template-components">
 						<strong><?php echo esc_html( $template_label ); ?></strong>
@@ -6170,16 +7303,41 @@ final class Plugin {
 						<?php else : ?>
 							<?php foreach ( $definitions as $component => $label ) : ?>
 								<label style="display:block;margin-bottom:6px;">
-									<input type="hidden" name="<?php echo esc_attr( self::OPTION_TEMPLATE_COMPONENTS ); ?>[<?php echo esc_attr( $component ); ?>]" value="0" />
+									<input type="hidden" name="<?php echo esc_attr( self::OPTION_TEMPLATE_COMPONENTS ); ?>[<?php echo esc_attr( $selected_template ); ?>][<?php echo esc_attr( $component ); ?>]" value="0" />
 									<input
 										type="checkbox"
-										name="<?php echo esc_attr( self::OPTION_TEMPLATE_COMPONENTS ); ?>[<?php echo esc_attr( $component ); ?>]"
+										name="<?php echo esc_attr( self::OPTION_TEMPLATE_COMPONENTS ); ?>[<?php echo esc_attr( $selected_template ); ?>][<?php echo esc_attr( $component ); ?>]"
 										value="1"
 										<?php checked( $settings[ $component ] ?? true ); ?>
 									/>
 									<?php echo esc_html( $label ); ?>
 								</label>
 							<?php endforeach; ?>
+						<?php endif; ?>
+						<?php if ( ! empty( $order_keys ) ) : ?>
+							<h3><?php esc_html_e( 'Section order', 'nova-bridge-suite' ); ?></h3>
+							<p class="description"><?php esc_html_e( 'Drag and drop to reorder sections. Top item appears first on the service page.', 'nova-bridge-suite' ); ?></p>
+							<ol class="service-cpt-component-order" data-service-cpt-order-list>
+								<?php foreach ( $order_keys as $position => $order_key ) : ?>
+									<?php $order_label = (string) ( $order_definitions[ $order_key ] ?? $order_key ); ?>
+									<li class="service-cpt-component-order__item" data-order-key="<?php echo esc_attr( $order_key ); ?>">
+										<span class="service-cpt-component-order__handle" aria-hidden="true">
+											<span class="dashicons dashicons-menu"></span>
+										</span>
+										<span class="service-cpt-component-order__label"><?php echo esc_html( $order_label ); ?></span>
+										<span class="service-cpt-component-order__position" data-order-position><?php echo esc_html( (string) ( $position + 1 ) ); ?></span>
+										<input
+											type="hidden"
+											name="<?php echo esc_attr( self::OPTION_TEMPLATE_COMPONENT_ORDER ); ?>[<?php echo esc_attr( $selected_template ); ?>][<?php echo esc_attr( $order_key ); ?>]"
+											value="<?php echo esc_attr( (string) ( $order_settings[ $order_key ] ?? ( ( $position + 1 ) * 10 ) ) ); ?>"
+											data-order-input
+										/>
+									</li>
+								<?php endforeach; ?>
+							</ol>
+							<?php if ( 'service-page-3' === $selected_template ) : ?>
+								<p class="description"><?php esc_html_e( 'Template 3 keeps the sidebar CTA inside the main content/sidebar section so the two-column layout stays intact.', 'nova-bridge-suite' ); ?></p>
+							<?php endif; ?>
 						<?php endif; ?>
 					</div>
 				</details>
@@ -6245,6 +7403,24 @@ final class Plugin {
 		}
 
 		return '';
+	}
+
+	private function is_transparent_color_value( string $value ): bool {
+		return 'transparent' === \strtolower( \trim( $value ) );
+	}
+
+	private function color_option_is_transparent( string $option, string $fallback_option = '', string $template_slug = '' ): bool {
+		$value = $this->get_color_option( $option, $template_slug );
+
+		if ( $this->is_transparent_color_value( $value ) ) {
+			return true;
+		}
+
+		if ( '' !== $value || '' === $fallback_option ) {
+			return false;
+		}
+
+		return $this->is_transparent_color_value( $this->get_color_option( $fallback_option, $template_slug ) );
 	}
 
 	public function sanitize_length_value( $value ): string {
@@ -6360,6 +7536,33 @@ final class Plugin {
 		return $this->sanitize_length_value( $value );
 	}
 
+	private function get_wrap_classes( string $template_slug = '' ): array {
+		$classes = [ 'service-cpt__wrap' ];
+		$template_slug = '' !== $template_slug ? $this->sanitize_template_option( $template_slug ) : $this->get_selected_template_slug();
+
+		if ( '' !== $template_slug ) {
+			$classes[] = 'service-cpt__wrap--' . \sanitize_html_class( $template_slug );
+		}
+
+		if ( $this->cta_media_has_content( $this->get_global_hero_background_image() ) ) {
+			$classes[] = 'service-cpt__wrap--has-hero-bg-image';
+		}
+
+		if ( $this->color_option_is_transparent( self::OPTION_COLOR_HERO_BG, '', $template_slug ) ) {
+			$classes[] = 'service-cpt__wrap--hero-outline';
+		}
+
+		if ( $this->color_option_is_transparent( self::OPTION_COLOR_SIDEBAR_CTA_BG, self::OPTION_COLOR_CTA_BG, $template_slug ) ) {
+			$classes[] = 'service-cpt__wrap--sidebar-cta-outline';
+		}
+
+		if ( $this->color_option_is_transparent( self::OPTION_COLOR_WIDE_CTA_BG, self::OPTION_COLOR_CTA_BG, $template_slug ) ) {
+			$classes[] = 'service-cpt__wrap--wide-cta-outline';
+		}
+
+		return array_values( array_unique( array_filter( $classes ) ) );
+	}
+
 	private function get_wrap_style_attribute( string $template_slug = '' ): string {
 		$styles = [];
 
@@ -6377,6 +7580,10 @@ final class Plugin {
 			self::OPTION_COLOR_HERO_TEXT => '--service-cpt-hero-text',
 			self::OPTION_COLOR_CTA_BG   => '--service-cpt-cta-bg',
 			self::OPTION_COLOR_CTA_TEXT => '--service-cpt-cta-text',
+			self::OPTION_COLOR_SIDEBAR_CTA_BG => '--service-cpt-sidebar-cta-bg',
+			self::OPTION_COLOR_SIDEBAR_CTA_TEXT => '--service-cpt-sidebar-cta-text',
+			self::OPTION_COLOR_WIDE_CTA_BG => '--service-cpt-wide-cta-bg',
+			self::OPTION_COLOR_WIDE_CTA_TEXT => '--service-cpt-wide-cta-text',
 			self::OPTION_COLOR_BUTTON_BG => '--service-cpt-button-bg',
 			self::OPTION_COLOR_BUTTON_TEXT => '--service-cpt-button-text',
 			self::OPTION_COLOR_BUTTON_OUTLINE => '--service-cpt-button-outline',
@@ -6398,6 +7605,15 @@ final class Plugin {
 			}
 
 			$styles[] = sprintf( '%s: %s', $css_var, $value );
+		}
+
+		$hero_background_image = $this->get_global_hero_background_image();
+		$hero_background_url   = \esc_url_raw( (string) ( $hero_background_image['url'] ?? '' ) );
+
+		if ( '' !== $hero_background_url ) {
+			$hero_background_url = \str_replace( '"', '%22', $hero_background_url );
+			$styles[] = sprintf( '--service-cpt-hero-bg-image: url("%s")', $hero_background_url );
+			$styles[] = '--service-cpt-hero-bg-overlay: linear-gradient(rgba(15, 23, 42, 0.56), rgba(15, 23, 42, 0.56))';
 		}
 
 		$section_padding = $this->get_length_option( self::OPTION_SPACE_SECTION_PADDING, $template_slug );
@@ -7007,6 +8223,20 @@ final class Plugin {
 		return \wp_html_excerpt( $summary, 160, '' );
 	}
 
+	private function get_service_archive_excerpt( int $post_id ): string {
+		$post = \get_post( $post_id );
+		$excerpt = $post instanceof \WP_Post ? (string) $post->post_excerpt : '';
+		$excerpt = \trim( \wp_strip_all_tags( $excerpt ) );
+
+		if ( '' === $excerpt ) {
+			$excerpt = $this->build_meta_description( $post_id );
+		}
+
+		$excerpt = (string) preg_replace( '/\s+/', ' ', $excerpt );
+
+		return \wp_trim_words( $excerpt, 18, '' );
+	}
+
 	private function remove_action_by_method( string $hook, string $method ): void {
 		global $wp_filter;
 
@@ -7096,23 +8326,8 @@ final class Plugin {
 			return;
 		}
 
-		$posts = \get_posts(
-			[
-				'post_type'      => self::CPT,
-				'post_status'    => 'any',
-				'posts_per_page' => -1,
-				'fields'         => 'ids',
-				'no_found_rows'  => true,
-			]
-		);
-
-		if ( empty( $posts ) ) {
-			return;
-		}
-
-		foreach ( $posts as $post_id ) {
-			$this->maybe_apply_template_content( (int) $post_id, true, $new_slug );
-		}
+		// Existing service pages render the active template dynamically. Rewriting
+		// every service post here can exhaust memory on plugin-heavy sites.
 	}
 
 	private function get_template_slug_from_request( \WP_REST_Request $request ): string {
@@ -7480,6 +8695,7 @@ final class Plugin {
 			: [ 'sp_main_1', 'sp_main_2', 'sp_main_3' ];
 		$image_keys = $template_one ? [ 'sp_image_1' ] : [ 'sp_image_1', 'sp_image_2' ];
 		$sidebar_keys = [
+			'sp_sidebar_image',
 			'sp_sidebar_title',
 			'sp_sidebar_copy',
 			'sp_sidebar_primary_label',
@@ -7685,8 +8901,9 @@ final class Plugin {
 				'copy'           => $meta['sp_hero_copy'],
 				'primary_label'  => $hero_cta['primary_label'],
 				'primary_url'    => $hero_cta['primary_url'],
-				'secondary_label'=> $hero_cta['secondary_label'],
-				'secondary_url'  => $hero_cta['secondary_url'],
+				'secondary_label' => $hero_cta['secondary_label'],
+				'secondary_url'   => $hero_cta['secondary_url'],
+				'background_image' => $this->get_global_hero_background_image(),
 			],
 			'intro'      => $meta['sp_intro'],
 			'content'    => [
@@ -7695,6 +8912,7 @@ final class Plugin {
 			],
 			'images'     => $image_payload,
 			'sidebar_cta'=> [
+				'image'          => $sidebar_cta['image'] ?? $this->format_media( 0 ),
 				'title'          => $sidebar_cta['title'],
 				'copy'           => $sidebar_cta['copy'],
 				'primary_label'  => $sidebar_cta['primary_label'],
