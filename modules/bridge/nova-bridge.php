@@ -130,6 +130,329 @@ if (!function_exists('cf_tmrb_sanitize_deep')) {
   }
 }
 
+if (!function_exists('cf_tmrb_acf_field_groups_for_context')) {
+  function cf_tmrb_acf_field_groups_for_context($acf_post_id, $context = []) {
+    if (!function_exists('acf_get_field_groups')) return [];
+    $context = is_array($context) ? $context : [];
+    if (!array_key_exists('post_id', $context)) $context['post_id'] = $acf_post_id;
+
+    static $cache = [];
+    $cache_key = md5(serialize([$acf_post_id, $context]));
+    if (array_key_exists($cache_key, $cache)) return $cache[$cache_key];
+
+    $groups = acf_get_field_groups($context);
+    if ((!is_array($groups) || empty($groups)) && $acf_post_id) {
+      $groups = acf_get_field_groups(['post_id' => $acf_post_id]);
+    }
+
+    $cache[$cache_key] = is_array($groups) ? $groups : [];
+    return $cache[$cache_key];
+  }
+
+  function cf_tmrb_acf_find_top_level_field($selector, $acf_post_id, $context = []) {
+    if (!function_exists('acf_get_fields')) return null;
+
+    $selector = (string) $selector;
+    if ($selector === '') return null;
+
+    $matches = [];
+    foreach (cf_tmrb_acf_field_groups_for_context($acf_post_id, $context) as $group) {
+      $fields = acf_get_fields($group);
+      if (!is_array($fields)) continue;
+
+      foreach ($fields as $field) {
+        if (!is_array($field) || empty($field['key'])) continue;
+
+        $key_matches  = isset($field['key']) && $field['key'] === $selector;
+        $name_matches = isset($field['name']) && $field['name'] === $selector;
+        if ($key_matches || $name_matches) {
+          $matches[$field['key']] = $field;
+        }
+      }
+    }
+
+    if (count($matches) !== 1) return null;
+    $matches = array_values($matches);
+    return $matches[0];
+  }
+
+  function cf_tmrb_acf_field_for_selector($selector, $acf_post_id, $context = []) {
+    $selector = (string) $selector;
+    if ($selector === '') return null;
+
+    static $cache = [];
+    $cache_key = md5(serialize([$selector, $acf_post_id, $context]));
+    if (array_key_exists($cache_key, $cache)) return $cache[$cache_key];
+
+    if (function_exists('get_field_object')) {
+      $field = get_field_object($selector, $acf_post_id, false, false);
+      if (is_array($field) && !empty($field['key'])) {
+        $cache[$cache_key] = $field;
+        return $field;
+      }
+    }
+
+    if (strpos($selector, 'field_') === 0 && function_exists('acf_get_field')) {
+      $field = acf_get_field($selector);
+      if (is_array($field) && !empty($field['key'])) {
+        $cache[$cache_key] = $field;
+        return $field;
+      }
+    }
+
+    $cache[$cache_key] = cf_tmrb_acf_find_top_level_field($selector, $acf_post_id, $context);
+    return $cache[$cache_key];
+  }
+
+  function cf_tmrb_acf_value_looks_like_raw_storage($field, $value) {
+    if (!is_array($field) || empty($field['type'])) return false;
+
+    if ($field['type'] === 'flexible_content') {
+      if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+        return true;
+      }
+
+      if (is_array($value) && cf_tmrb_is_list_array($value)) {
+        $first = reset($value);
+        return is_string($first);
+      }
+    }
+
+    if ($field['type'] === 'repeater' && (is_int($value) || (is_string($value) && ctype_digit($value)))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function cf_tmrb_update_acf_field_if_available($selector, $value, $acf_post_id, $context = [], &$acf_save_values = null, &$acf_touched = null) {
+    if (!function_exists('update_field')) return false;
+
+    $field = cf_tmrb_acf_field_for_selector($selector, $acf_post_id, $context);
+    if (!is_array($field) || empty($field['key'])) return false;
+    if ($acf_touched !== null) $acf_touched = true;
+    if (cf_tmrb_acf_value_looks_like_raw_storage($field, $value)) return false;
+
+    // Use the ACF field key so new API-created values get their hidden reference meta.
+    update_field($field['key'], $value, $acf_post_id);
+    return $field;
+  }
+
+  function cf_tmrb_acf_top_level_fields($acf_post_id, $context = []) {
+    if (!function_exists('acf_get_fields')) return [];
+
+    static $cache = [];
+    $cache_key = md5(serialize([$acf_post_id, $context]));
+    if (array_key_exists($cache_key, $cache)) return $cache[$cache_key];
+
+    $fields = [];
+    foreach (cf_tmrb_acf_field_groups_for_context($acf_post_id, $context) as $group) {
+      $group_fields = acf_get_fields($group);
+      if (!is_array($group_fields)) continue;
+
+      foreach ($group_fields as $field) {
+        if (is_array($field) && !empty($field['key'])) {
+          $fields[$field['key']] = $field;
+        }
+      }
+    }
+
+    $cache[$cache_key] = array_values($fields);
+    return $cache[$cache_key];
+  }
+
+  function cf_tmrb_acf_match_field_from_path($path, $fields) {
+    $parts = explode('_', (string) $path);
+    if (empty($parts) || !is_array($fields)) return null;
+
+    for ($length = count($parts); $length >= 1; $length--) {
+      $candidate = implode('_', array_slice($parts, 0, $length));
+
+      foreach ($fields as $field) {
+        if (!is_array($field) || empty($field['key'])) continue;
+
+        $name_matches = isset($field['name']) && (string) $field['name'] === $candidate;
+        $key_matches  = isset($field['key']) && (string) $field['key'] === $candidate;
+        if (!$name_matches && !$key_matches) continue;
+
+        return [
+          'field'     => $field,
+          'remaining' => array_slice($parts, $length),
+        ];
+      }
+    }
+
+    return null;
+  }
+
+  function cf_tmrb_acf_find_flexible_layout($field, $layout_name) {
+    if (!is_array($field) || empty($field['layouts']) || !is_array($field['layouts'])) return null;
+    $layout_name = (string) $layout_name;
+    if ($layout_name === '') return null;
+
+    foreach ($field['layouts'] as $layout) {
+      if (!is_array($layout)) continue;
+
+      $name_matches = isset($layout['name']) && (string) $layout['name'] === $layout_name;
+      $key_matches  = isset($layout['key']) && (string) $layout['key'] === $layout_name;
+      if ($name_matches || $key_matches) return $layout;
+    }
+
+    return null;
+  }
+
+  function cf_tmrb_acf_raw_index_value($top_name, $index, $incoming, $existing) {
+    $layout_key = $top_name . '_' . (int) $index . '_acf_fc_layout';
+    $sources = [$incoming, $existing];
+    foreach ($sources as $source) {
+      if (is_array($source) && array_key_exists($layout_key, $source) && is_scalar($source[$layout_key])) {
+        return (string) $source[$layout_key];
+      }
+
+      if (!is_array($source) || !array_key_exists($top_name, $source) || !is_array($source[$top_name])) {
+        continue;
+      }
+
+      if (array_key_exists($index, $source[$top_name])) {
+        $row = $source[$top_name][$index];
+        if (is_array($row) && isset($row['acf_fc_layout']) && is_scalar($row['acf_fc_layout'])) {
+          return (string) $row['acf_fc_layout'];
+        }
+        if (is_scalar($row)) return (string) $row;
+      }
+
+      $string_index = (string) $index;
+      if (array_key_exists($string_index, $source[$top_name])) {
+        $row = $source[$top_name][$string_index];
+        if (is_array($row) && isset($row['acf_fc_layout']) && is_scalar($row['acf_fc_layout'])) {
+          return (string) $row['acf_fc_layout'];
+        }
+        if (is_scalar($row)) return (string) $row;
+      }
+    }
+
+    return '';
+  }
+
+  function cf_tmrb_acf_resolve_sub_field_key_from_parts($parts, $fields) {
+    if (empty($parts) || !is_array($fields)) return '';
+
+    $match = cf_tmrb_acf_match_field_from_path(implode('_', $parts), $fields);
+    if (!is_array($match) || empty($match['field']['key'])) return '';
+
+    $field = $match['field'];
+    $remaining = isset($match['remaining']) && is_array($match['remaining']) ? $match['remaining'] : [];
+    if (empty($remaining)) return (string) $field['key'];
+
+    $type = isset($field['type']) ? (string) $field['type'] : '';
+    if (in_array($type, ['repeater', 'group', 'clone'], true) && !empty($field['sub_fields']) && is_array($field['sub_fields'])) {
+      if ($type === 'repeater' && isset($remaining[0]) && ctype_digit((string) $remaining[0])) {
+        array_shift($remaining);
+      }
+
+      return cf_tmrb_acf_resolve_sub_field_key_from_parts($remaining, $field['sub_fields']);
+    }
+
+    return '';
+  }
+
+  function cf_tmrb_acf_resolve_raw_reference_key($raw_key, $incoming, $existing, $acf_post_id, $context = []) {
+    $raw_key = cf_tmrb_normalize_key($raw_key);
+    if ($raw_key === '' || strpos($raw_key, '_') === 0 || strpos($raw_key, '.') !== false) return '';
+
+    $direct_field = cf_tmrb_acf_field_for_selector($raw_key, $acf_post_id, $context);
+    if (is_array($direct_field) && !empty($direct_field['key'])) {
+      return (string) $direct_field['key'];
+    }
+
+    $top_match = cf_tmrb_acf_match_field_from_path($raw_key, cf_tmrb_acf_top_level_fields($acf_post_id, $context));
+    if (!is_array($top_match) || empty($top_match['field']['key'])) return '';
+
+    $top_field = $top_match['field'];
+    $remaining = isset($top_match['remaining']) && is_array($top_match['remaining']) ? $top_match['remaining'] : [];
+    if (empty($remaining)) return (string) $top_field['key'];
+
+    $top_name = isset($top_field['name']) ? (string) $top_field['name'] : '';
+    $type = isset($top_field['type']) ? (string) $top_field['type'] : '';
+
+    if ($type === 'flexible_content' && isset($remaining[0]) && ctype_digit((string) $remaining[0])) {
+      $row_index = (int) array_shift($remaining);
+      $layout_name = cf_tmrb_acf_raw_index_value($top_name, $row_index, $incoming, $existing);
+      $layout = cf_tmrb_acf_find_flexible_layout($top_field, $layout_name);
+
+      if (is_array($layout) && !empty($layout['sub_fields']) && is_array($layout['sub_fields'])) {
+        return cf_tmrb_acf_resolve_sub_field_key_from_parts($remaining, $layout['sub_fields']);
+      }
+
+      return '';
+    }
+
+    if ($type === 'repeater' && isset($remaining[0]) && ctype_digit((string) $remaining[0])) {
+      array_shift($remaining);
+    }
+
+    if (in_array($type, ['repeater', 'group', 'clone'], true) && !empty($top_field['sub_fields']) && is_array($top_field['sub_fields'])) {
+      return cf_tmrb_acf_resolve_sub_field_key_from_parts($remaining, $top_field['sub_fields']);
+    }
+
+    return '';
+  }
+
+  function cf_tmrb_sync_post_acf_raw_references($post_id, $incoming, $existing, $context = []) {
+    if (!function_exists('acf_get_field_groups')) return;
+
+    $reference_source = is_array($incoming) ? $incoming : [];
+    foreach ($reference_source as $raw_key => $_value) {
+      $norm_key = cf_tmrb_normalize_key($raw_key);
+      if ($norm_key === '' || strpos($norm_key, '_') === 0) continue;
+
+      $field_key = cf_tmrb_acf_resolve_raw_reference_key($norm_key, $reference_source, $existing, $post_id, $context);
+      if ($field_key === '') continue;
+
+      update_post_meta((int) $post_id, '_' . $norm_key, $field_key);
+    }
+  }
+
+  function cf_tmrb_sync_term_acf_raw_references($term_id, $taxonomy, $incoming, $existing, $context = []) {
+    if (!function_exists('acf_get_field_groups')) return;
+
+    $acf_post_id = "{$taxonomy}_{$term_id}";
+    $reference_source = is_array($incoming) ? $incoming : [];
+    foreach ($reference_source as $raw_key => $_value) {
+      $norm_key = cf_tmrb_normalize_key($raw_key);
+      if ($norm_key === '' || strpos($norm_key, '_') === 0) continue;
+
+      $field_key = cf_tmrb_acf_resolve_raw_reference_key($norm_key, $reference_source, $existing, $acf_post_id, $context);
+      if ($field_key === '') continue;
+
+      update_term_meta((int) $term_id, '_' . $norm_key, $field_key);
+    }
+  }
+
+  function cf_tmrb_acf_post_context($post_id) {
+    $post = get_post($post_id);
+    $context = ['post_id' => $post_id];
+
+    if ($post instanceof WP_Post) {
+      $context['post_type'] = $post->post_type;
+      $context['post_status'] = $post->post_status;
+    }
+
+    return (array) apply_filters('cf_tmrb_acf_post_context', $context, $post_id);
+  }
+
+  function cf_tmrb_acf_term_context($taxonomy, $term_id) {
+    $acf_post_id = "{$taxonomy}_{$term_id}";
+    $context = [
+      'post_id'  => $acf_post_id,
+      'taxonomy' => $taxonomy,
+      'term_id'  => $term_id,
+    ];
+
+    return (array) apply_filters('cf_tmrb_acf_term_context', $context, $taxonomy, $term_id);
+  }
+}
+
 /** ---------- Legacy options for terms ---------- **/
 if (!function_exists('cf_tmrb_legacy_option_candidates')) {
   function cf_tmrb_legacy_option_candidates($taxonomy, $term_id) {
@@ -592,11 +915,7 @@ add_action('rest_api_init', function () {
 
   /* ---------- meta_all: read/write with nested paths + ACF + legacy options ---------- */
   register_rest_field('product_cat', 'meta_all', [
-    'get_callback' => function($term_arr, $field_name = null, $request = null) use ($include_private_term) {
-      if (!cf_tmrb_should_expand_rest_meta_field($request)) {
-        return [];
-      }
-
+    'get_callback' => function($term_arr) use ($include_private_term) {
       $term_id  = (int)$term_arr['id'];
       $taxonomy = isset($term_arr['taxonomy']) ? $term_arr['taxonomy'] : 'product_cat';
       $include_private = $include_private_term($term_id);
@@ -654,6 +973,10 @@ add_action('rest_api_init', function () {
 
       $term_id  = (int)$term_obj->term_id;
       $taxonomy = $term_obj->taxonomy;
+      $acf_post_id = "{$taxonomy}_{$term_id}";
+      $acf_context = cf_tmrb_acf_term_context($taxonomy, $term_id);
+      $acf_save_values = [];
+      $acf_touched = false;
 
       $include_private = true; // caller is authorized at this point
 
@@ -688,14 +1011,7 @@ add_action('rest_api_init', function () {
           $container = (isset($existing[$top]) && is_array($existing[$top])) ? $existing[$top] : [];
           cf_tmrb_set_by_path($container, $rest, $san);
 
-          if (function_exists('get_field_object')) {
-            $fo = get_field_object($top, "{$taxonomy}_{$term_id}");
-            if (is_array($fo) && isset($fo['key'])) {
-              update_field($fo['key'], $container, "{$taxonomy}_{$term_id}");
-            } else {
-              update_term_meta($term_id, $top, $container);
-            }
-          } else {
+          if (!cf_tmrb_update_acf_field_if_available($top, $container, $acf_post_id, $acf_context, $acf_save_values, $acf_touched)) {
             update_term_meta($term_id, $top, $container);
           }
           $existing[$top] = $container;
@@ -707,11 +1023,7 @@ add_action('rest_api_init', function () {
           $nextValue = (is_array($existing[$normKey]) && is_array($san))
             ? cf_tmrb_merge_meta_value($existing[$normKey], $san)
             : $san;
-          if (function_exists('get_field_object')) {
-            $fo = get_field_object($normKey, "{$taxonomy}_{$term_id}");
-            if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $nextValue, "{$taxonomy}_{$term_id}"); }
-            else { update_term_meta($term_id, $normKey, $nextValue); }
-          } else {
+          if (!cf_tmrb_update_acf_field_if_available($normKey, $nextValue, $acf_post_id, $acf_context, $acf_save_values, $acf_touched)) {
             update_term_meta($term_id, $normKey, $nextValue);
           }
           $existing[$normKey] = $nextValue;
@@ -746,11 +1058,7 @@ add_action('rest_api_init', function () {
             list($top, $rest) = explode('.', $one['path'], 2);
             $container = isset($existing[$top]) && is_array($existing[$top]) ? $existing[$top] : [];
             cf_tmrb_set_by_path($container, $rest, $san);
-            if (function_exists('get_field_object')) {
-              $fo = get_field_object($top, "{$taxonomy}_{$term_id}");
-              if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $container, "{$taxonomy}_{$term_id}"); }
-              else { update_term_meta($term_id, $top, $container); }
-            } else {
+            if (!cf_tmrb_update_acf_field_if_available($top, $container, $acf_post_id, $acf_context, $acf_save_values, $acf_touched)) {
               update_term_meta($term_id, $top, $container);
             }
             $existing[$top] = $container;
@@ -776,14 +1084,7 @@ add_action('rest_api_init', function () {
           if ($guess['type'] === 'term' && !empty($guess['top'])) {
             $container = [];
             cf_tmrb_set_by_path($container, $normKey, $san);
-            if (function_exists('get_field_object')) {
-              $fo = get_field_object($guess['top'], "{$taxonomy}_{$term_id}");
-              if (is_array($fo) && isset($fo['key'])) {
-                update_field($fo['key'], $container, "{$taxonomy}_{$term_id}");
-              } else {
-                update_term_meta($term_id, $guess['top'], $container);
-              }
-            } else {
+            if (!cf_tmrb_update_acf_field_if_available($guess['top'], $container, $acf_post_id, $acf_context, $acf_save_values, $acf_touched)) {
               update_term_meta($term_id, $guess['top'], $container);
             }
             $existing[$guess['top']] = $container;
@@ -803,15 +1104,22 @@ add_action('rest_api_init', function () {
           }
         }
 
-        /* Fallback: create as top-level term meta */
-        update_term_meta($term_id, $normKey, $san);
-        $existing[$normKey] = $san;
+        /* Fallback: create as top-level term meta, unless this is a known ACF field. */
+        $acf_field = cf_tmrb_update_acf_field_if_available($normKey, $san, $acf_post_id, $acf_context, $acf_save_values, $acf_touched);
+        if (is_array($acf_field)) {
+          $existing[isset($acf_field['name']) ? $acf_field['name'] : $normKey] = $san;
+        } else {
+          update_term_meta($term_id, $normKey, $san);
+          $existing[$normKey] = $san;
+        }
       }
 
       if (!empty($yoast_updates)) {
         $changed = cf_tmrb_update_yoast_term_meta($taxonomy, $term_id, $yoast_updates);
         if ($changed) cf_tmrb_touch_yoast_term_indexable($term_obj);
       }
+
+      cf_tmrb_sync_term_acf_raw_references($term_id, $taxonomy, $value, $existing, $acf_context);
       return true;
     },
 
@@ -825,11 +1133,7 @@ add_action('rest_api_init', function () {
 
   /* ---------- meta_all_flat: flattened view ---------- */
   register_rest_field('product_cat', 'meta_all_flat', [
-    'get_callback' => function($term_arr, $field_name = null, $request = null) use ($include_private_term) {
-      if (!cf_tmrb_should_expand_rest_meta_field($request)) {
-        return [];
-      }
-
+    'get_callback' => function($term_arr) use ($include_private_term) {
       $term_id  = (int)$term_arr['id'];
       $taxonomy = isset($term_arr['taxonomy']) ? $term_arr['taxonomy'] : 'product_cat';
       $include_private = $include_private_term($term_id);
@@ -925,48 +1229,6 @@ if (!function_exists('cf_tmrb_supported_post_types')) {
   }
 }
 
-if (!function_exists('cf_tmrb_should_expand_rest_meta_field')) {
-  /**
-   * Avoid expanding large meta payloads during mutation responses.
-   *
-   * Create, update, and delete responses serialize registered REST fields too.
-   * Keep these helpers fully available on GET by default, but skip them on
-   * non-GET requests unless a site explicitly opts back in.
-   *
-   * @param mixed $request Current REST request, when available.
-   * @return bool
-   */
-  function cf_tmrb_should_expand_rest_meta_field($request) {
-    if (!($request instanceof WP_REST_Request)) {
-      return true;
-    }
-
-    $method = strtoupper((string) $request->get_method());
-    if (!in_array($method, ['GET', 'HEAD'], true)) {
-      return (bool) apply_filters('cf_tmrb_expand_meta_all_on_non_get', false, $request);
-    }
-
-    $override = $request->get_param('include_meta_all');
-    if ($override === null) {
-      return true;
-    }
-
-    if (is_bool($override)) {
-      return $override;
-    }
-
-    if (is_numeric($override)) {
-      return ((int) $override) === 1;
-    }
-
-    if (is_string($override)) {
-      return in_array(strtolower(trim($override)), ['1', 'true', 'yes', 'on'], true);
-    }
-
-    return !empty($override);
-  }
-}
-
 /** Expose some commonly-used Genesis keys via REST (optional & harmless) */
 add_action('init', function () {
   foreach (cf_tmrb_supported_post_types() as $pt) {
@@ -991,6 +1253,10 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
     $post_id = (int) $post_obj->ID;
     if (!current_user_can('edit_post', $post_id)) return new WP_Error('rest_forbidden','Insufficient permissions.',['status'=>403]);
     if (!is_array($value)) return new WP_Error('rest_invalid_param','meta_all must be an object.',['status'=>400]);
+
+    $acf_context = cf_tmrb_acf_post_context($post_id);
+    $acf_save_values = [];
+    $acf_touched = false;
 
     // Caller is authorized -> allow private and public keys alike.
     $existing = [];
@@ -1033,11 +1299,7 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
         $container = (isset($existing[$top]) && is_array($existing[$top])) ? $existing[$top] : [];
         cf_tmrb_set_by_path($container, $rest, $san);
 
-        if (function_exists('get_field_object')) {
-          $fo = get_field_object($top, $post_id);
-          if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $container, $post_id); }
-          else { update_post_meta($post_id, $top, $container); }
-        } else {
+        if (!cf_tmrb_update_acf_field_if_available($top, $container, $post_id, $acf_context, $acf_save_values, $acf_touched)) {
           update_post_meta($post_id, $top, $container);
         }
         $existing[$top] = $container;
@@ -1051,11 +1313,7 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
         $nextValue = (is_array($existing[$normKey]) && is_array($san))
           ? cf_tmrb_merge_meta_value($existing[$normKey], $san)
           : $san;
-        if (function_exists('get_field_object')) {
-          $fo = get_field_object($normKey, $post_id);
-          if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $nextValue, $post_id); }
-          else { update_post_meta($post_id, $normKey, $nextValue); }
-        } else {
+        if (!cf_tmrb_update_acf_field_if_available($normKey, $nextValue, $post_id, $acf_context, $acf_save_values, $acf_touched)) {
           update_post_meta($post_id, $normKey, $nextValue);
         }
         cf_tmrb_apply_genesis_fallback($post_id, $normKey, $nextValue);
@@ -1084,11 +1342,7 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
         $container = isset($existing[$top]) && is_array($existing[$top]) ? $existing[$top] : [];
         cf_tmrb_set_by_path($container, $rest, $san);
 
-        if (function_exists('get_field_object')) {
-          $fo = get_field_object($top, $post_id);
-          if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $container, $post_id); }
-          else { update_post_meta($post_id, $top, $container); }
-        } else {
+        if (!cf_tmrb_update_acf_field_if_available($top, $container, $post_id, $acf_context, $acf_save_values, $acf_touched)) {
           update_post_meta($post_id, $top, $container);
         }
         $existing[$top] = $container;
@@ -1109,11 +1363,7 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
       if (is_array($guess) && isset($guess['type']) && $guess['type'] === 'post' && !empty($guess['top'])) {
         $container = [];
         cf_tmrb_set_by_path($container, $normKey, $san);
-        if (function_exists('get_field_object')) {
-          $fo = get_field_object($guess['top'], $post_id);
-          if (is_array($fo) && isset($fo['key'])) { update_field($fo['key'], $container, $post_id); }
-          else { update_post_meta($post_id, $guess['top'], $container); }
-        } else {
+        if (!cf_tmrb_update_acf_field_if_available($guess['top'], $container, $post_id, $acf_context, $acf_save_values, $acf_touched)) {
           update_post_meta($post_id, $guess['top'], $container);
         }
         $existing[$guess['top']] = $container;
@@ -1122,10 +1372,37 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
         continue;
       }
 
-      // Fallback: create as top-level post meta
-      update_post_meta($post_id, $normKey, $san);
+      // Fallback: create as top-level post meta, unless this is a known ACF field.
+      $acf_field = cf_tmrb_update_acf_field_if_available($normKey, $san, $post_id, $acf_context, $acf_save_values, $acf_touched);
+      if (is_array($acf_field)) {
+        $existing[isset($acf_field['name']) ? $acf_field['name'] : $normKey] = $san;
+      } else {
+        update_post_meta($post_id, $normKey, $san);
+        $existing[$normKey] = $san;
+      }
       cf_tmrb_apply_genesis_fallback($post_id, $normKey, $san);
-      $existing[$normKey] = $san;
+    }
+
+    cf_tmrb_sync_post_acf_raw_references($post_id, $normalized_input, $existing, $acf_context);
+    return true;
+  }
+}
+
+if (!function_exists('cf_tmrb_update_post_acf_payload')) {
+  function cf_tmrb_update_post_acf_payload($value, $post_obj) {
+    if (!($post_obj instanceof WP_Post)) return new WP_Error('rest_invalid','Invalid post object.',['status'=>400]);
+    $post_id = (int) $post_obj->ID;
+    if (!current_user_can('edit_post', $post_id)) return new WP_Error('rest_forbidden','Insufficient permissions.',['status'=>403]);
+    if (!is_array($value)) return new WP_Error('rest_invalid_param','acf must be an object.',['status'=>400]);
+
+    $acf_context = cf_tmrb_acf_post_context($post_id);
+    $acf_save_values = [];
+    $acf_touched = false;
+
+    foreach ($value as $selector => $field_value) {
+      $selector = cf_tmrb_normalize_key($selector);
+      $san = cf_tmrb_sanitize_deep($field_value);
+      cf_tmrb_update_acf_field_if_available($selector, $san, $post_id, $acf_context, $acf_save_values, $acf_touched);
     }
 
     return true;
@@ -1160,11 +1437,7 @@ add_action('rest_api_init', function () {
 
   /* ---------- meta_all for posts ---------- */
   register_rest_field($pts, 'meta_all', [
-    'get_callback' => function ($post_arr, $field_name = null, $request = null) use ($include_private_post) {
-      if (!cf_tmrb_should_expand_rest_meta_field($request)) {
-        return [];
-      }
-
+    'get_callback' => function ($post_arr) use ($include_private_post) {
       $post_id = (int) $post_arr['id'];
       $include_private = $include_private_post($post_id);
 
@@ -1203,11 +1476,7 @@ add_action('rest_api_init', function () {
 
   /* ---------- meta_all_flat for posts ---------- */
   register_rest_field($pts, 'meta_all_flat', [
-    'get_callback' => function ($post_arr, $field_name = null, $request = null) use ($include_private_post) {
-      if (!cf_tmrb_should_expand_rest_meta_field($request)) {
-        return [];
-      }
-
+    'get_callback' => function ($post_arr) use ($include_private_post) {
       $post_id = (int) $post_arr['id'];
       $include_private = $include_private_post($post_id);
 

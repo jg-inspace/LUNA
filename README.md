@@ -4,7 +4,7 @@
 - Requires at least: 6.0
 - Tested up to: 6.9
 - Requires PHP: 7.4
-- Stable tag: 2.4.6
+- Stable tag: 2.4.7
 - License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -47,11 +47,22 @@ Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is ac
 
 ## Changelog
 
+### 2.4.7
+
+- Add route-aware REST bootstrap loading so NOVA endpoints only load the module needed for that request.
+- Keep Elementor, WPML, Polylang, Blog CPT, Service CPT, post resolver, core bridge, and update checker from loading into unrelated save requests.
+- Preserve Blog and Service CPT support for targeted Elementor and translation requests by loading those CPT modules only when the target post type needs them.
+- Limit the bundled update checker to admin and cron contexts to reduce frontend and REST request memory usage.
+- Avoid decoding large REST bodies during bootstrap and skip loading the suite for non-NOVA REST and Elementor editor AJAX save requests.
+- Keep localized multilingual settings filters out of targeted NOVA REST requests to prevent WPML save-time memory spikes.
+- Load only the matching Blog or Service CPT module during admin edit, trash, delete, and untrash requests for those CPT entries.
+- Add missing Elementor REST schema types so flexible payload fields validate without PHP warnings.
+
 ### 2.4.6
 
-- Prevent recursive multilingual option resolution during REST create and update requests so WordPress mutations no longer trigger critical errors on multilingual sites.
-- Skip expensive `meta_all` and `meta_all_flat` expansion on non-GET REST responses by default to keep create and update responses lightweight and stable.
-- Avoid redundant Elementor cache clears during document finalization and stop clearing the global files cache unless a site explicitly opts in.
+- Write API-provided ACF fields through ACF's `update_field()` when received by the `meta_all` handler so hidden reference meta is created without requiring a manual backend save.
+- Create hidden ACF reference meta for raw `meta_all`, `meta_all_flat`, and nested `meta` API payloads without invoking ACF's full save lifecycle.
+- Keep the full suite out of core REST write requests; only the bridge module loads when a request actually contains `meta_all` or `meta_all_flat`.
 
 ### 2.4.5
 

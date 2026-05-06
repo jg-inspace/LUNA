@@ -759,9 +759,11 @@ class Rest_Controller extends WP_REST_Controller {
 				'description' => __( 'Existing page ID to use as content blueprint.', 'nova-bridge-suite' ),
 			),
 			'elementor_data' => array(
+				'type'        => array( 'array', 'string' ),
 				'description' => __( 'Full Elementor document (array or JSON string).', 'nova-bridge-suite' ),
 			),
 			'elementor_page_settings' => array(
+				'type'        => array( 'array', 'object', 'string', 'null' ),
 				'description' => __( 'Optional Elementor page settings payload persisted to _elementor_page_settings.', 'nova-bridge-suite' ),
 			),
 			'append_html'   => array(
@@ -808,6 +810,7 @@ class Rest_Controller extends WP_REST_Controller {
 							'description' => __( 'Dot notation path inside widget settings.', 'nova-bridge-suite' ),
 						),
 						'value'      => array(
+							'type'        => array( 'array', 'object', 'string', 'number', 'integer', 'boolean', 'null' ),
 							'description' => __( 'Value to assign (string or scalar).', 'nova-bridge-suite' ),
 						),
 					),
