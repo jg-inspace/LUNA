@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NOVA Bridge Suite
  * Description: Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
- * Version: 2.4.7
+ * Version: 2.4.8
  * Author: LUNA B.V.
  * Requires PHP: 7.4
  * License: Proprietary
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'NOVA_BRIDGE_SUITE_VERSION', '2.4.7' );
+define( 'NOVA_BRIDGE_SUITE_VERSION', '2.4.8' );
 define( 'NOVA_BRIDGE_SUITE_PLUGIN_FILE', __FILE__ );
 define( 'NOVA_BRIDGE_SUITE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'NOVA_BRIDGE_SUITE_OPTION', 'nova_bridge_settings' );
@@ -274,6 +274,46 @@ function nova_bridge_suite_get_managed_blog_post_types(): array {
     return array_values( array_unique( array_filter( $post_types ) ) );
 }
 
+function nova_bridge_suite_get_managed_blog_rest_bases(): array {
+    $raw = get_option( 'quarantined_cpt_bodyclean_cpts', null );
+
+    if ( null === $raw ) {
+        return [ 'blog' ];
+    }
+
+    if ( ! is_array( $raw ) ) {
+        return [];
+    }
+
+    $rest_bases = [];
+
+    foreach ( $raw as $definition ) {
+        if ( ! is_array( $definition ) ) {
+            continue;
+        }
+
+        $rest_base = isset( $definition['slug'] )
+            ? sanitize_title_with_dashes( (string) $definition['slug'] )
+            : '';
+
+        if ( '' === $rest_base && isset( $definition['type'] ) ) {
+            $rest_base = sanitize_title_with_dashes( (string) $definition['type'] );
+        }
+
+        if ( '' !== $rest_base ) {
+            $rest_bases[] = $rest_base;
+        }
+    }
+
+    return array_values( array_unique( array_filter( $rest_bases ) ) );
+}
+
+function nova_bridge_suite_get_service_page_rest_base(): string {
+    $rest_base = sanitize_title_with_dashes( (string) get_option( 'service_cpt_slug', 'services' ) );
+
+    return '' === $rest_base ? 'services' : $rest_base;
+}
+
 function nova_bridge_suite_get_module_keys_for_post_type( string $post_type ): array {
     $post_type   = sanitize_key( $post_type );
     $module_keys = [];
@@ -284,6 +324,31 @@ function nova_bridge_suite_get_module_keys_for_post_type( string $post_type ): a
 
     if ( '' !== $post_type && in_array( $post_type, nova_bridge_suite_get_managed_blog_post_types(), true ) ) {
         $module_keys[] = 'custom_post_types';
+    }
+
+    return array_values( array_unique( $module_keys ) );
+}
+
+function nova_bridge_suite_get_cpt_module_keys_for_core_rest_route( string $route ): array {
+    $route = trim( $route, '/' );
+
+    if ( 'wp/v2' === $route || 'wp/v2/types' === $route || 0 === strpos( $route, 'wp/v2/types/' ) ) {
+        return [ 'custom_post_types', 'service_page_cpt' ];
+    }
+
+    if ( ! preg_match( '#^wp/v2/([^/]+)(?:/|$)#', $route, $matches ) ) {
+        return [];
+    }
+
+    $rest_base   = sanitize_title_with_dashes( (string) $matches[1] );
+    $module_keys = [];
+
+    if ( in_array( $rest_base, nova_bridge_suite_get_managed_blog_rest_bases(), true ) ) {
+        $module_keys[] = 'custom_post_types';
+    }
+
+    if ( $rest_base === nova_bridge_suite_get_service_page_rest_base() ) {
+        $module_keys[] = 'service_page_cpt';
     }
 
     return array_values( array_unique( $module_keys ) );
@@ -397,6 +462,11 @@ function nova_bridge_suite_get_targeted_rest_module_keys( string $route ): ?arra
         return null;
     }
 
+    $core_rest_cpt_module_keys = nova_bridge_suite_get_cpt_module_keys_for_core_rest_route( $route );
+    if ( ! empty( $core_rest_cpt_module_keys ) ) {
+        return $core_rest_cpt_module_keys;
+    }
+
     $module_keys = null;
 
     if ( nova_bridge_suite_rest_route_matches( $route, 'cf-bridge/v1' ) ) {
@@ -434,6 +504,7 @@ function nova_bridge_suite_get_targeted_rest_module_keys( string $route ): ?arra
         || nova_bridge_suite_rest_route_matches( $route, 'nova-gutenberg/v1' )
         || nova_bridge_suite_rest_route_matches( $route, 'nova-wpbakery/v1' )
         || nova_bridge_suite_rest_route_matches( $route, 'nova-breakdance/v1' )
+        || nova_bridge_suite_rest_route_matches( $route, 'nova-avada/v1' )
     ) {
         $module_keys = nova_bridge_suite_add_cpt_dependencies_for_rest_route( $module_keys, $route );
     }
@@ -503,6 +574,11 @@ if ( null !== $nova_bridge_suite_admin_content_write_module_keys ) {
 }
 
 if ( nova_bridge_suite_is_core_rest_content_write_request() ) {
+    $core_rest_cpt_module_keys = nova_bridge_suite_get_cpt_module_keys_for_core_rest_route( nova_bridge_suite_get_rest_route_path() );
+    if ( ! empty( $core_rest_cpt_module_keys ) ) {
+        nova_bridge_suite_load_selected_modules( $core_rest_cpt_module_keys );
+    }
+
     if ( nova_bridge_suite_core_rest_write_uses_bridge_payload() ) {
         require_once NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'modules/bridge/nova-bridge.php';
     }
