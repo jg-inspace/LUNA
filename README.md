@@ -4,7 +4,7 @@
 - Requires at least: 6.0
 - Tested up to: 6.9
 - Requires PHP: 7.4
-- Stable tag: 2.4.9
+- Stable tag: 2.4.10
 - License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -46,6 +46,13 @@ No. It works alongside builders like Avada, Elementor, WPBakery, and more. NOVA 
 Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is active you can also enable the optional rich text field module for category pages - in case your category page template still needs this.
 
 ## Changelog
+
+### 2.4.10
+
+- Route ACF fields from `meta_all` and `meta_all.acf` through ACF's native REST writer so service/page CPT flexible-content blocks save as real ACF rows instead of literal meta.
+- Finalize ACF REST writes with reference-key syncing and a guarded post-save pass so frontend templates see flexible-content fields without manually pressing Update.
+- Preserve seamless ACF clone wrappers, such as `page_blocks` cloning `blocks`, so frontend templates that read the wrapper field render immediately after REST posting.
+- Restore the 2.4.6 `meta_all` response guard to avoid expanding large meta payloads during REST mutation responses.
 
 ### 2.4.9
 
