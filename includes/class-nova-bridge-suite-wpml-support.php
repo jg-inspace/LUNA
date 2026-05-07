@@ -152,6 +152,20 @@ final class Nova_Bridge_Suite_WPML_Support {
 	private static $bootstrapped = false;
 
 	/**
+	 * Track lightweight multilingual runtime hooks separately from localized option hooks.
+	 *
+	 * @var bool
+	 */
+	private static $runtime_bootstrapped = false;
+
+	/**
+	 * Track localized option hooks separately so post mutations can skip them.
+	 *
+	 * @var bool
+	 */
+	private static $option_localization_bootstrapped = false;
+
+	/**
 	 * Cached localized option lookups.
 	 *
 	 * @var array<string,array{exists:bool,value:mixed}>
@@ -172,6 +186,34 @@ final class Nova_Bridge_Suite_WPML_Support {
 	 */
 	private static $localized_settings_groups = [];
 
+	/**
+	 * Prevent recursive localized option resolution.
+	 *
+	 * @var bool
+	 */
+	private static $localized_option_resolution_guard = false;
+
+	/**
+	 * Prevent recursive current-language resolution.
+	 *
+	 * @var bool
+	 */
+	private static $current_language_resolution_guard = false;
+
+	/**
+	 * Prevent recursive default-language resolution.
+	 *
+	 * @var bool
+	 */
+	private static $default_language_resolution_guard = false;
+
+	/**
+	 * Prevent recursive available-language resolution.
+	 *
+	 * @var bool
+	 */
+	private static $available_languages_resolution_guard = false;
+
 	public static function bootstrap(): void {
 		if ( self::$bootstrapped ) {
 			return;
@@ -179,10 +221,33 @@ final class Nova_Bridge_Suite_WPML_Support {
 
 		self::$bootstrapped = true;
 
+		self::bootstrap_runtime();
+
+		if ( self::should_register_option_localization_hooks() ) {
+			self::bootstrap_option_localization_hooks();
+		}
+	}
+
+	public static function bootstrap_runtime(): void {
+		if ( self::$runtime_bootstrapped ) {
+			return;
+		}
+
+		self::$runtime_bootstrapped = true;
+
 		// The blog CPT slug is configurable, so extend multilingual configs at runtime.
 		add_filter( 'wpml_config_array', [ self::class, 'filter_wpml_config_array' ] );
 		add_filter( 'pll_get_post_types', [ self::class, 'filter_polylang_post_types' ], 10, 2 );
 		add_filter( 'pll_translate_post_meta', [ self::class, 'filter_polylang_post_meta' ], 10, 5 );
+	}
+
+	private static function bootstrap_option_localization_hooks(): void {
+		if ( self::$option_localization_bootstrapped ) {
+			return;
+		}
+
+		self::$option_localization_bootstrapped = true;
+
 		add_filter( 'allowed_options', [ self::class, 'filter_allowed_options' ], 1000 );
 		add_filter( 'whitelist_options', [ self::class, 'filter_allowed_options' ], 1000 );
 		add_filter( 'pre_update_option', [ self::class, 'filter_nondefault_option_updates' ], 10, 3 );
@@ -193,6 +258,29 @@ final class Nova_Bridge_Suite_WPML_Support {
 		foreach ( self::get_localized_base_options() as $option ) {
 			add_filter( 'pre_option_' . $option, [ self::class, 'filter_localized_option_value' ], 10, 3 );
 		}
+	}
+
+	/**
+	 * Skip localized option shadowing during post mutations.
+	 *
+	 * Admin post saves/deletes and mutating REST requests can trigger WPML,
+	 * Elementor, WooCommerce and settings lookups while WordPress is already in
+	 * a write flow. Keep the lightweight multilingual config hooks, but avoid
+	 * localized option shadowing there because it can recurse through language
+	 * resolution and cause very large memory spikes.
+	 */
+	private static function should_register_option_localization_hooks(): bool {
+		if ( function_exists( 'nova_bridge_suite_is_admin_content_write_request' ) && nova_bridge_suite_is_admin_content_write_request() ) {
+			return false;
+		}
+
+		if ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST ) {
+			return true;
+		}
+
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
+
+		return in_array( $method, [ 'GET', 'HEAD', 'OPTIONS' ], true );
 	}
 
 	/**
@@ -464,55 +552,75 @@ final class Nova_Bridge_Suite_WPML_Support {
 	}
 
 	public static function get_current_language_code(): string {
-		$requested_language = self::get_requested_language_code();
-
-		if ( '' !== $requested_language ) {
-			return $requested_language;
+		if ( self::$current_language_resolution_guard ) {
+			return '';
 		}
 
-		if ( self::is_wpml_available() ) {
-			$language = apply_filters( 'wpml_current_language', null );
+		self::$current_language_resolution_guard = true;
 
-			if ( is_string( $language ) ) {
-				return self::normalize_language_key( $language );
+		try {
+			$requested_language = self::get_requested_language_code();
+
+			if ( '' !== $requested_language ) {
+				return $requested_language;
 			}
-		}
 
-		if ( self::is_polylang_available() && function_exists( 'pll_current_language' ) ) {
-			$language = pll_current_language( 'slug' );
+			if ( self::is_wpml_available() ) {
+				$language = apply_filters( 'wpml_current_language', null );
 
-			if ( is_string( $language ) ) {
-				return self::normalize_language_key( $language );
+				if ( is_string( $language ) ) {
+					return self::normalize_language_key( $language );
+				}
 			}
-		}
 
-		return '';
+			if ( self::is_polylang_available() && function_exists( 'pll_current_language' ) ) {
+				$language = pll_current_language( 'slug' );
+
+				if ( is_string( $language ) ) {
+					return self::normalize_language_key( $language );
+				}
+			}
+
+			return '';
+		} finally {
+			self::$current_language_resolution_guard = false;
+		}
 	}
 
 	public static function get_default_language_code(): string {
-		$requested_default_language = self::get_requested_default_language_code();
-
-		if ( '' !== $requested_default_language ) {
-			return $requested_default_language;
+		if ( self::$default_language_resolution_guard ) {
+			return '';
 		}
 
-		if ( self::is_wpml_available() ) {
-			$language = apply_filters( 'wpml_default_language', null );
+		self::$default_language_resolution_guard = true;
 
-			if ( is_string( $language ) ) {
-				return self::normalize_language_key( $language );
+		try {
+			$requested_default_language = self::get_requested_default_language_code();
+
+			if ( '' !== $requested_default_language ) {
+				return $requested_default_language;
 			}
-		}
 
-		if ( self::is_polylang_available() && function_exists( 'pll_default_language' ) ) {
-			$language = pll_default_language( 'slug' );
+			if ( self::is_wpml_available() ) {
+				$language = apply_filters( 'wpml_default_language', null );
 
-			if ( is_string( $language ) ) {
-				return self::normalize_language_key( $language );
+				if ( is_string( $language ) ) {
+					return self::normalize_language_key( $language );
+				}
 			}
-		}
 
-		return '';
+			if ( self::is_polylang_available() && function_exists( 'pll_default_language' ) ) {
+				$language = pll_default_language( 'slug' );
+
+				if ( is_string( $language ) ) {
+					return self::normalize_language_key( $language );
+				}
+			}
+
+			return '';
+		} finally {
+			self::$default_language_resolution_guard = false;
+		}
 	}
 
 	private static function is_wpml_available(): bool {
@@ -635,14 +743,24 @@ final class Nova_Bridge_Suite_WPML_Support {
 			return $pre_option;
 		}
 
-		if ( ! self::should_use_localized_option( $option ) ) {
-			return false;
+		if ( self::$localized_option_resolution_guard ) {
+			return $pre_option;
 		}
 
-		$localized_option = self::build_localized_option_name( $option, self::get_current_language_code() );
-		$localized_value  = self::get_raw_option_value( $localized_option );
+		self::$localized_option_resolution_guard = true;
 
-		return $localized_value['exists'] ? $localized_value['value'] : false;
+		try {
+			if ( ! self::should_use_localized_option( $option ) ) {
+				return false;
+			}
+
+			$localized_option = self::build_localized_option_name( $option, self::get_current_language_code() );
+			$localized_value  = self::get_raw_option_value( $localized_option );
+
+			return $localized_value['exists'] ? $localized_value['value'] : false;
+		} finally {
+			self::$localized_option_resolution_guard = false;
+		}
 	}
 
 	/**
@@ -776,68 +894,78 @@ final class Nova_Bridge_Suite_WPML_Support {
 	 * @return array<string,array<string,mixed>>
 	 */
 	private static function get_available_languages(): array {
-		$languages        = [];
-		$default_language = self::get_default_language_code();
-
-		if ( self::is_wpml_available() ) {
-			$active_languages = apply_filters( 'wpml_active_languages', null, [ 'skip_missing' => 0 ] );
-
-			if ( is_array( $active_languages ) ) {
-				foreach ( $active_languages as $key => $language ) {
-					if ( is_array( $language ) ) {
-						$code = self::normalize_language_key(
-							(string) ( $language['language_code'] ?? $language['code'] ?? $key )
-						);
-						$label = (string) ( $language['translated_name'] ?? $language['native_name'] ?? $language['display_name'] ?? $language['english_name'] ?? $language['name'] ?? strtoupper( $code ) );
-					} else {
-						$code  = self::normalize_language_key( (string) $key );
-						$label = strtoupper( $code );
-					}
-
-					if ( '' === $code ) {
-						continue;
-					}
-
-					$languages[ $code ] = [
-						'code'       => $code,
-						'label'      => '' !== $label ? $label : strtoupper( $code ),
-						'is_default' => $code === $default_language,
-					];
-				}
-			}
+		if ( self::$available_languages_resolution_guard ) {
+			return [];
 		}
 
-		if ( empty( $languages ) && self::is_polylang_available() && function_exists( 'pll_languages_list' ) ) {
-			$codes = pll_languages_list( [ 'fields' => 'slug' ] );
+		self::$available_languages_resolution_guard = true;
 
-			if ( is_array( $codes ) ) {
-				foreach ( $codes as $code ) {
-					$code = self::normalize_language_key( (string) $code );
+		try {
+			$languages        = [];
+			$default_language = self::get_default_language_code();
 
-					if ( '' === $code ) {
-						continue;
-					}
+			if ( self::is_wpml_available() ) {
+				$active_languages = apply_filters( 'wpml_active_languages', null, [ 'skip_missing' => 0 ] );
 
-					$label = strtoupper( $code );
-
-					if ( function_exists( 'PLL' ) && PLL() && isset( PLL()->model ) && method_exists( PLL()->model, 'get_language' ) ) {
-						$language_object = PLL()->model->get_language( $code );
-
-						if ( is_object( $language_object ) && ! empty( $language_object->name ) ) {
-							$label = (string) $language_object->name;
+				if ( is_array( $active_languages ) ) {
+					foreach ( $active_languages as $key => $language ) {
+						if ( is_array( $language ) ) {
+							$code = self::normalize_language_key(
+								(string) ( $language['language_code'] ?? $language['code'] ?? $key )
+							);
+							$label = (string) ( $language['translated_name'] ?? $language['native_name'] ?? $language['display_name'] ?? $language['english_name'] ?? $language['name'] ?? strtoupper( $code ) );
+						} else {
+							$code  = self::normalize_language_key( (string) $key );
+							$label = strtoupper( $code );
 						}
-					}
 
-					$languages[ $code ] = [
-						'code'       => $code,
-						'label'      => $label,
-						'is_default' => $code === $default_language,
-					];
+						if ( '' === $code ) {
+							continue;
+						}
+
+						$languages[ $code ] = [
+							'code'       => $code,
+							'label'      => '' !== $label ? $label : strtoupper( $code ),
+							'is_default' => $code === $default_language,
+						];
+					}
 				}
 			}
-		}
 
-		return $languages;
+			if ( empty( $languages ) && self::is_polylang_available() && function_exists( 'pll_languages_list' ) ) {
+				$codes = pll_languages_list( [ 'fields' => 'slug' ] );
+
+				if ( is_array( $codes ) ) {
+					foreach ( $codes as $code ) {
+						$code = self::normalize_language_key( (string) $code );
+
+						if ( '' === $code ) {
+							continue;
+						}
+
+						$label = strtoupper( $code );
+
+						if ( function_exists( 'PLL' ) && PLL() && isset( PLL()->model ) && method_exists( PLL()->model, 'get_language' ) ) {
+							$language_object = PLL()->model->get_language( $code );
+
+							if ( is_object( $language_object ) && ! empty( $language_object->name ) ) {
+								$label = (string) $language_object->name;
+							}
+						}
+
+						$languages[ $code ] = [
+							'code'       => $code,
+							'label'      => $label,
+							'is_default' => $code === $default_language,
+						];
+					}
+				}
+			}
+
+			return $languages;
+		} finally {
+			self::$available_languages_resolution_guard = false;
+		}
 	}
 
 	private static function is_available_language_code( string $language_code ): bool {

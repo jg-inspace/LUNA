@@ -41,10 +41,9 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 1. NOVA Settings screen with module toggles.
 
 = 2.4.10 =
-* Route ACF fields from meta_all and meta_all.acf through ACF's native REST writer so service/page CPT flexible-content blocks save as real ACF rows instead of literal meta.
-* Finalize ACF REST writes with reference-key syncing and a guarded post-save pass so frontend templates see flexible-content fields without manually pressing Update.
-* Preserve seamless ACF clone wrappers, such as page_blocks cloning blocks, so frontend templates that read the wrapper field render immediately after REST posting.
-* Restore the 2.4.6 meta_all response guard to avoid expanding large meta payloads during REST mutation responses.
+* Further reduce memory usage during post edit, save, trash, and delete actions by preventing unnecessary module loading.
+* Keep disabled modules from loading through route-aware bootstrap paths.
+* Improve ACF support for meta_all, grouped ACF payloads, clone wrappers, and flexible-content fields.
 
 = 2.4.9 =
 * Fix Elementor bridge field values being split into arrays by WordPress REST validation when posting Polylang + Elementor translated pages.

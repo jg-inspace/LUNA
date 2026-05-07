@@ -160,10 +160,236 @@ if (!function_exists('cf_tmrb_acf_field_groups_for_context')) {
 
       if (is_array($cloned_field) && !empty($cloned_field['key'])) {
         $fields[$cloned_field['key']] = $cloned_field;
+        continue;
+      }
+
+      $cloned_field = cf_tmrb_acf_db_field_by_key($selector);
+      if (is_array($cloned_field) && !empty($cloned_field['key'])) {
+        $fields[$cloned_field['key']] = $cloned_field;
       }
     }
 
     return array_values($fields);
+  }
+
+  function cf_tmrb_acf_parse_db_field($post) {
+    if (!($post instanceof WP_Post)) return null;
+    if ($post->post_type !== 'acf-field') return null;
+
+    $settings = maybe_unserialize($post->post_content);
+    if (!is_array($settings)) $settings = [];
+
+    $field = $settings;
+    $field['ID'] = (int) $post->ID;
+    $field['key'] = (string) $post->post_name;
+    $field['label'] = (string) $post->post_title;
+    $field['name'] = (string) $post->post_excerpt;
+    $field['parent'] = (int) $post->post_parent;
+    $field['parent_layout'] = isset($settings['parent_layout']) ? (string) $settings['parent_layout'] : '';
+
+    return $field['key'] !== '' && $field['name'] !== '' ? $field : null;
+  }
+
+  function cf_tmrb_acf_db_field_by_key($field_key) {
+    $field_key = (string) $field_key;
+    if ($field_key === '' || strpos($field_key, 'field_') !== 0) return null;
+
+    static $cache = [];
+    if (array_key_exists($field_key, $cache)) return $cache[$field_key];
+
+    $posts = get_posts([
+      'post_type'        => 'acf-field',
+      'post_status'      => ['publish', 'acf-disabled'],
+      'name'             => $field_key,
+      'posts_per_page'   => 1,
+      'suppress_filters' => true,
+      'no_found_rows'    => true,
+    ]);
+
+    $cache[$field_key] = !empty($posts) ? cf_tmrb_acf_parse_db_field($posts[0]) : null;
+    return $cache[$field_key];
+  }
+
+  function cf_tmrb_acf_db_field_by_name($field_name, $type = '') {
+    $field_name = (string) $field_name;
+    if ($field_name === '') return null;
+
+    $type = (string) $type;
+    static $cache = [];
+    $cache_key = $field_name . ':' . $type;
+    if (array_key_exists($cache_key, $cache)) return $cache[$cache_key];
+
+    $field_posts = get_posts([
+      'post_type'        => 'acf-field',
+      'post_status'      => ['publish', 'acf-disabled'],
+      'posts_per_page'   => -1,
+      'orderby'          => 'menu_order',
+      'order'            => 'ASC',
+      'suppress_filters' => true,
+      'no_found_rows'    => true,
+    ]);
+
+    $matches = [];
+    foreach ($field_posts as $field_post) {
+      $field = cf_tmrb_acf_parse_db_field($field_post);
+      if (!is_array($field) || empty($field['key']) || empty($field['name'])) continue;
+      if ((string) $field['name'] !== $field_name) continue;
+      if ($type !== '' && (string) ($field['type'] ?? '') !== $type) continue;
+
+      $matches[$field['key']] = $field;
+    }
+
+    $cache[$cache_key] = count($matches) === 1 ? reset($matches) : null;
+    return $cache[$cache_key];
+  }
+
+  function cf_tmrb_acf_db_group_matches_context($group_post, $context = []) {
+    if (!($group_post instanceof WP_Post)) return false;
+    if ($group_post->post_type !== 'acf-field-group') return false;
+
+    $settings = maybe_unserialize($group_post->post_content);
+    if (!is_array($settings) || empty($settings['location']) || !is_array($settings['location'])) return false;
+
+    $post_type = isset($context['post_type']) ? sanitize_key((string) $context['post_type']) : '';
+    if ($post_type === '' && !empty($context['post_id'])) {
+      $detected = get_post_type($context['post_id']);
+      $post_type = is_string($detected) ? sanitize_key($detected) : '';
+    }
+
+    foreach ($settings['location'] as $rule_group) {
+      if (!is_array($rule_group)) continue;
+
+      $has_supported_rule = false;
+      $matches = true;
+
+      foreach ($rule_group as $rule) {
+        if (!is_array($rule) || empty($rule['param'])) continue;
+
+        if ((string) $rule['param'] !== 'post_type') {
+          continue;
+        }
+
+        $has_supported_rule = true;
+        $expected = sanitize_key((string) ($rule['value'] ?? ''));
+        $operator = (string) ($rule['operator'] ?? '==');
+        $rule_matches = $post_type !== '' && $expected !== '' && $post_type === $expected;
+
+        if ($operator === '!=') {
+          $rule_matches = !$rule_matches;
+        }
+
+        if (!$rule_matches) {
+          $matches = false;
+          break;
+        }
+      }
+
+      if ($has_supported_rule && $matches) return true;
+    }
+
+    return false;
+  }
+
+  function cf_tmrb_acf_db_top_level_fields($acf_post_id, $context = []) {
+    $context = is_array($context) ? $context : [];
+    if (!array_key_exists('post_id', $context)) $context['post_id'] = $acf_post_id;
+
+    static $cache = [];
+    $cache_key = md5(serialize([$acf_post_id, $context]));
+    if (array_key_exists($cache_key, $cache)) return $cache[$cache_key];
+
+    $groups = get_posts([
+      'post_type'        => 'acf-field-group',
+      'post_status'      => ['publish', 'acf-disabled'],
+      'posts_per_page'   => -1,
+      'suppress_filters' => true,
+      'no_found_rows'    => true,
+    ]);
+
+    $group_ids = [];
+    foreach ($groups as $group) {
+      if (cf_tmrb_acf_db_group_matches_context($group, $context)) {
+        $group_ids[] = (int) $group->ID;
+      }
+    }
+
+    if (empty($group_ids)) {
+      $cache[$cache_key] = [];
+      return [];
+    }
+
+    $field_posts = get_posts([
+      'post_type'        => 'acf-field',
+      'post_status'      => ['publish', 'acf-disabled'],
+      'post_parent__in'  => $group_ids,
+      'posts_per_page'   => -1,
+      'orderby'          => 'menu_order',
+      'order'            => 'ASC',
+      'suppress_filters' => true,
+      'no_found_rows'    => true,
+    ]);
+
+    $fields = [];
+    foreach ($field_posts as $field_post) {
+      $field = cf_tmrb_acf_parse_db_field($field_post);
+      if (!is_array($field) || empty($field['key'])) continue;
+
+      cf_tmrb_acf_add_top_level_field($fields, $field);
+
+      foreach (cf_tmrb_acf_cloned_fields($field) as $cloned_field) {
+        cf_tmrb_acf_add_top_level_field($fields, $cloned_field);
+      }
+    }
+
+    $cache[$cache_key] = array_values($fields);
+    return $cache[$cache_key];
+  }
+
+  function cf_tmrb_acf_db_child_fields($parent_id, $parent_layout = '') {
+    $parent_id = (int) $parent_id;
+    if ($parent_id <= 0) return [];
+
+    $parent_layout = (string) $parent_layout;
+    static $cache = [];
+    $cache_key = $parent_id . ':' . $parent_layout;
+    if (array_key_exists($cache_key, $cache)) return $cache[$cache_key];
+
+    $field_posts = get_posts([
+      'post_type'        => 'acf-field',
+      'post_status'      => ['publish', 'acf-disabled'],
+      'post_parent'      => $parent_id,
+      'posts_per_page'   => -1,
+      'orderby'          => 'menu_order',
+      'order'            => 'ASC',
+      'suppress_filters' => true,
+      'no_found_rows'    => true,
+    ]);
+
+    $fields = [];
+    foreach ($field_posts as $field_post) {
+      $field = cf_tmrb_acf_parse_db_field($field_post);
+      if (!is_array($field) || empty($field['key']) || empty($field['name'])) continue;
+      if ($parent_layout !== '' && (string) ($field['parent_layout'] ?? '') !== $parent_layout) continue;
+
+      $fields[] = $field;
+    }
+
+    $cache[$cache_key] = $fields;
+    return $fields;
+  }
+
+  function cf_tmrb_acf_field_by_name($fields, $name) {
+    if (!is_array($fields)) return null;
+
+    $name = (string) $name;
+    foreach ($fields as $field) {
+      if (!is_array($field)) continue;
+      if ((string) ($field['name'] ?? '') === $name || (string) ($field['key'] ?? '') === $name) {
+        return $field;
+      }
+    }
+
+    return null;
   }
 
   function cf_tmrb_acf_field_groups_for_context($acf_post_id, $context = []) {
@@ -253,12 +479,317 @@ if (!function_exists('cf_tmrb_acf_field_groups_for_context')) {
     return false;
   }
 
+  function cf_tmrb_acf_list_rows($value) {
+    return is_array($value) && cf_tmrb_is_list_array($value) ? $value : null;
+  }
+
+  function cf_tmrb_acf_layout_key_by_name($field, $layout_name) {
+    if (!is_array($field) || empty($field['layouts']) || !is_array($field['layouts'])) return '';
+    $layout_name = (string) $layout_name;
+    if ($layout_name === '') return '';
+
+    foreach ($field['layouts'] as $layout_key => $layout) {
+      if (!is_array($layout)) continue;
+      if ((string) ($layout['name'] ?? '') === $layout_name || (string) ($layout['key'] ?? '') === $layout_name) {
+        return (string) ($layout['key'] ?? $layout_key);
+      }
+    }
+
+    return '';
+  }
+
+  function cf_tmrb_acf_raw_store_simple_value($post_id, $meta_key, $field, $value) {
+    $meta_key = cf_tmrb_normalize_key($meta_key);
+    if ($meta_key === '') return;
+
+    update_post_meta((int) $post_id, $meta_key, cf_tmrb_sanitize_deep($value));
+
+    if (is_array($field) && !empty($field['key'])) {
+      update_post_meta((int) $post_id, '_' . $meta_key, (string) $field['key']);
+    }
+  }
+
+  function cf_tmrb_acf_raw_store_repeater_rows($post_id, $meta_key, $field, $rows) {
+    if (!is_array($field) || empty($field['ID'])) {
+      cf_tmrb_acf_raw_store_simple_value($post_id, $meta_key, $field, $rows);
+      return;
+    }
+
+    $rows = cf_tmrb_acf_list_rows($rows);
+    if (!is_array($rows)) {
+      cf_tmrb_acf_raw_store_simple_value($post_id, $meta_key, $field, $rows);
+      return;
+    }
+
+    update_post_meta((int) $post_id, $meta_key, count($rows));
+    if (!empty($field['key'])) {
+      update_post_meta((int) $post_id, '_' . $meta_key, (string) $field['key']);
+    }
+
+    $sub_fields = cf_tmrb_acf_db_child_fields((int) $field['ID']);
+    foreach ($rows as $index => $row) {
+      if (!is_array($row)) continue;
+
+      foreach ($row as $child_name => $child_value) {
+        $child_field = cf_tmrb_acf_field_by_name($sub_fields, $child_name);
+        $child_storage = $meta_key . '_' . (int) $index . '_' . cf_tmrb_normalize_key($child_name);
+        cf_tmrb_acf_raw_store_field_value($post_id, $child_storage, $child_field, $child_value);
+      }
+    }
+  }
+
+  function cf_tmrb_acf_raw_store_field_value($post_id, $meta_key, $field, $value) {
+    if (is_array($field)) {
+      $type = (string) ($field['type'] ?? '');
+
+      if ($type === 'repeater') {
+        cf_tmrb_acf_raw_store_repeater_rows($post_id, $meta_key, $field, $value);
+        return;
+      }
+
+      if ($type === 'group' && is_array($value) && !empty($field['ID'])) {
+        update_post_meta((int) $post_id, '_' . $meta_key, (string) ($field['key'] ?? ''));
+        $sub_fields = cf_tmrb_acf_db_child_fields((int) $field['ID']);
+        foreach ($value as $child_name => $child_value) {
+          $child_field = cf_tmrb_acf_field_by_name($sub_fields, $child_name);
+          $child_storage = $meta_key . '_' . cf_tmrb_normalize_key($child_name);
+          cf_tmrb_acf_raw_store_field_value($post_id, $child_storage, $child_field, $child_value);
+        }
+        return;
+      }
+    }
+
+    cf_tmrb_acf_raw_store_simple_value($post_id, $meta_key, $field, $value);
+  }
+
+  function cf_tmrb_acf_raw_store_flexible_content($post_id, $field, $rows) {
+    if (!is_array($field) || (string) ($field['type'] ?? '') !== 'flexible_content') return false;
+
+    $rows = cf_tmrb_acf_list_rows($rows);
+    if (!is_array($rows)) return false;
+
+    $field_name = cf_tmrb_normalize_key((string) ($field['name'] ?? ''));
+    if ($field_name === '') return false;
+
+    $layouts = [];
+    foreach ($rows as $index => $row) {
+      if (!is_array($row)) return false;
+
+      $layout_name = isset($row['acf_fc_layout']) ? (string) $row['acf_fc_layout'] : '';
+      if ($layout_name === '') return false;
+
+      $layouts[(int) $index] = $layout_name;
+      $layout_key = cf_tmrb_acf_layout_key_by_name($field, $layout_name);
+      $sub_fields = (!empty($field['ID']) && $layout_key !== '')
+        ? cf_tmrb_acf_db_child_fields((int) $field['ID'], $layout_key)
+        : [];
+
+      foreach ($row as $child_name => $child_value) {
+        if ($child_name === 'acf_fc_layout') continue;
+
+        $child_name = cf_tmrb_normalize_key($child_name);
+        if ($child_name === '') continue;
+
+        $child_field = cf_tmrb_acf_field_by_name($sub_fields, $child_name);
+        $child_storage = $field_name . '_' . (int) $index . '_' . $child_name;
+        cf_tmrb_acf_raw_store_field_value($post_id, $child_storage, $child_field, $child_value);
+      }
+    }
+
+    update_post_meta((int) $post_id, $field_name, $layouts);
+    if (!empty($field['key'])) {
+      update_post_meta((int) $post_id, '_' . $field_name, (string) $field['key']);
+    }
+
+    return true;
+  }
+
+  function cf_tmrb_acf_raw_store_value_if_needed($post_id, $field, $value) {
+    if (!is_array($field) || empty($field['type'])) return false;
+
+    if ((string) $field['type'] === 'flexible_content') {
+      $rows = cf_tmrb_acf_list_rows($value);
+      if (!is_array($rows)) return false;
+
+      $first = reset($rows);
+      if (!is_array($first) || !array_key_exists('acf_fc_layout', $first)) return false;
+
+      return cf_tmrb_acf_raw_store_flexible_content($post_id, $field, $value);
+    }
+
+    return false;
+  }
+
+  function cf_tmrb_acf_raw_storage_field_for_selector($selector, $acf_post_id, $context = []) {
+    $selector = cf_tmrb_normalize_key($selector);
+    if ($selector === '') return null;
+
+    $field = cf_tmrb_acf_find_top_level_field($selector, $acf_post_id, $context);
+    if (is_array($field) && !empty($field['key'])) return $field;
+
+    $field = cf_tmrb_acf_db_field_by_name($selector, 'flexible_content');
+    if (is_array($field) && !empty($field['key'])) return $field;
+
+    return cf_tmrb_acf_field_for_selector($selector, $acf_post_id, $context);
+  }
+
+  function cf_tmrb_acf_admin_save_value($field, $value) {
+    if (!is_array($field)) return $value;
+
+    $type = (string) ($field['type'] ?? '');
+
+    if ($type === 'flexible_content') {
+      $rows = cf_tmrb_acf_list_rows($value);
+      if (!is_array($rows)) return $value;
+
+      $out = [];
+      foreach ($rows as $index => $row) {
+        if (!is_array($row)) continue;
+
+        $layout_name = isset($row['acf_fc_layout']) ? (string) $row['acf_fc_layout'] : '';
+        $layout_key = cf_tmrb_acf_layout_key_by_name($field, $layout_name);
+        if ($layout_key === '') continue;
+
+        $next_row = ['acf_fc_layout' => $layout_name];
+        $sub_fields = !empty($field['ID']) ? cf_tmrb_acf_db_child_fields((int) $field['ID'], $layout_key) : [];
+
+        foreach ($row as $child_name => $child_value) {
+          if ($child_name === 'acf_fc_layout') continue;
+
+          $child_field = cf_tmrb_acf_field_by_name($sub_fields, $child_name);
+          if (!is_array($child_field) || empty($child_field['key'])) continue;
+
+          $next_row[(string) $child_field['key']] = cf_tmrb_acf_admin_save_value($child_field, $child_value);
+        }
+
+        $out[(int) $index] = $next_row;
+      }
+
+      return $out;
+    }
+
+    if ($type === 'repeater') {
+      $rows = cf_tmrb_acf_list_rows($value);
+      if (!is_array($rows) || empty($field['ID'])) return $value;
+
+      $out = [];
+      $sub_fields = cf_tmrb_acf_db_child_fields((int) $field['ID']);
+      foreach ($rows as $index => $row) {
+        if (!is_array($row)) continue;
+
+        $next_row = [];
+        foreach ($row as $child_name => $child_value) {
+          $child_field = cf_tmrb_acf_field_by_name($sub_fields, $child_name);
+          if (!is_array($child_field) || empty($child_field['key'])) continue;
+
+          $next_row[(string) $child_field['key']] = cf_tmrb_acf_admin_save_value($child_field, $child_value);
+        }
+
+        $out[(int) $index] = $next_row;
+      }
+
+      return $out;
+    }
+
+    if ($type === 'group' && is_array($value) && !empty($field['ID'])) {
+      $out = [];
+      $sub_fields = cf_tmrb_acf_db_child_fields((int) $field['ID']);
+      foreach ($value as $child_name => $child_value) {
+        $child_field = cf_tmrb_acf_field_by_name($sub_fields, $child_name);
+        if (!is_array($child_field) || empty($child_field['key'])) continue;
+
+        $out[(string) $child_field['key']] = cf_tmrb_acf_admin_save_value($child_field, $child_value);
+      }
+
+      return $out;
+    }
+
+    return $value;
+  }
+
+  function cf_tmrb_save_acf_payload_like_admin($post_id, $payload, $context = [], &$saved_selectors = null) {
+    if (!function_exists('acf_save_post') || !is_array($payload) || empty($payload)) return false;
+
+    $post_id = (int) $post_id;
+    if ($post_id <= 0) return false;
+
+    static $saving = [];
+    if (isset($saving[$post_id])) return false;
+
+    $context = is_array($context) ? $context : [];
+    $admin_payload = [];
+    $prepared_selectors = [];
+
+    foreach ($payload as $selector => $field_value) {
+      $normalized_selector = cf_tmrb_normalize_key($selector);
+      $field = cf_tmrb_acf_field_for_selector($normalized_selector, $post_id, $context);
+      if (!is_array($field) || empty($field['key'])) continue;
+
+      $admin_payload[(string) $field['key']] = cf_tmrb_acf_admin_save_value($field, cf_tmrb_sanitize_deep($field_value));
+      $prepared_selectors[$normalized_selector] = true;
+    }
+
+    if (empty($admin_payload)) return false;
+
+    $had_acf_post = array_key_exists('acf', $_POST);
+    $previous_acf_post = $had_acf_post ? $_POST['acf'] : null;
+
+    $saving[$post_id] = true;
+    $_POST['acf'] = $admin_payload;
+    try {
+      acf_save_post($post_id);
+    } finally {
+      if ($had_acf_post) {
+        $_POST['acf'] = $previous_acf_post;
+      } else {
+        unset($_POST['acf']);
+      }
+      unset($saving[$post_id]);
+    }
+
+    if (is_array($saved_selectors)) {
+      $saved_selectors = array_keys($prepared_selectors);
+    }
+
+    return true;
+  }
+
+  function cf_tmrb_raw_store_acf_flexible_payload($post_id, $payload, $context = []) {
+    if (!is_array($payload) || empty($payload)) return [];
+
+    $post_id = (int) $post_id;
+    $context = is_array($context) ? $context : [];
+    $stored = [];
+
+    foreach ($payload as $selector => $field_value) {
+      $normalized_selector = cf_tmrb_normalize_key($selector);
+      $field = cf_tmrb_acf_raw_storage_field_for_selector($normalized_selector, $post_id, $context);
+      if (!is_array($field) || empty($field['key'])) continue;
+
+      if (cf_tmrb_acf_raw_store_value_if_needed($post_id, $field, $field_value)) {
+        $stored[$normalized_selector] = true;
+      }
+    }
+
+    return array_keys($stored);
+  }
+
   function cf_tmrb_update_acf_field_if_available($selector, $value, $acf_post_id, $context = [], &$acf_save_values = null, &$acf_touched = null) {
     if (!function_exists('update_field')) return false;
 
     $field = cf_tmrb_acf_field_for_selector($selector, $acf_post_id, $context);
     if (!is_array($field) || empty($field['key'])) return false;
     if ($acf_touched !== null) $acf_touched = true;
+
+    $raw_storage_field = $field;
+    if ((string) ($field['type'] ?? '') === 'flexible_content' && empty($field['ID'])) {
+      $resolved_field = cf_tmrb_acf_raw_storage_field_for_selector($selector, $acf_post_id, $context);
+      if (is_array($resolved_field) && !empty($resolved_field['key'])) {
+        $raw_storage_field = $resolved_field;
+      }
+    }
+
+    if (cf_tmrb_acf_raw_store_value_if_needed($acf_post_id, $raw_storage_field, $value)) return $raw_storage_field;
     if (cf_tmrb_acf_value_looks_like_raw_storage($field, $value)) return false;
 
     // Use the ACF field key so new API-created values get their hidden reference meta.
@@ -267,23 +798,31 @@ if (!function_exists('cf_tmrb_acf_field_groups_for_context')) {
   }
 
   function cf_tmrb_acf_top_level_fields($acf_post_id, $context = []) {
-    if (!function_exists('acf_get_fields')) return [];
-
     static $cache = [];
     $cache_key = md5(serialize([$acf_post_id, $context]));
     if (array_key_exists($cache_key, $cache)) return $cache[$cache_key];
 
     $fields = [];
-    foreach (cf_tmrb_acf_field_groups_for_context($acf_post_id, $context) as $group) {
-      $group_fields = acf_get_fields($group);
-      if (!is_array($group_fields)) continue;
+    if (function_exists('acf_get_fields')) {
+      foreach (cf_tmrb_acf_field_groups_for_context($acf_post_id, $context) as $group) {
+        $group_fields = acf_get_fields($group);
+        if (!is_array($group_fields)) continue;
 
-      foreach ($group_fields as $field) {
-        cf_tmrb_acf_add_top_level_field($fields, $field);
+        foreach ($group_fields as $field) {
+          cf_tmrb_acf_add_top_level_field($fields, $field);
 
-        foreach (cf_tmrb_acf_cloned_fields($field) as $cloned_field) {
-          cf_tmrb_acf_add_top_level_field($fields, $cloned_field);
+          foreach (cf_tmrb_acf_cloned_fields($field) as $cloned_field) {
+            cf_tmrb_acf_add_top_level_field($fields, $cloned_field);
+          }
         }
+      }
+    }
+
+    foreach (cf_tmrb_acf_db_top_level_fields($acf_post_id, $context) as $field) {
+      cf_tmrb_acf_add_top_level_field($fields, $field);
+
+      foreach (cf_tmrb_acf_cloned_fields($field) as $cloned_field) {
+        cf_tmrb_acf_add_top_level_field($fields, $cloned_field);
       }
     }
 
@@ -1107,20 +1646,28 @@ if (!function_exists('cf_tmrb_expand_nested_acf_meta_payload')) {
     }
   }
 
-  function cf_tmrb_finalize_post_acf_rest_payload($post, $request) {
+  function cf_tmrb_finalize_post_acf_rest_payload($post, $request, $force = false) {
     if (!($post instanceof WP_Post) || !($request instanceof WP_REST_Request)) return;
 
     $acf_payload = $request->get_param('acf');
-    if (!is_array($acf_payload) || empty($acf_payload)) return;
+    if (!is_array($acf_payload)) $acf_payload = [];
+    if (empty($acf_payload) && !$force) return;
 
     static $finalizing = [];
+    static $finalized = [];
     $post_id = (int) $post->ID;
     if (isset($finalizing[$post_id])) return;
+
+    $request_token = $post_id . ':' . spl_object_hash($request);
+    if (isset($finalized[$request_token])) return;
+    $finalized[$request_token] = true;
 
     $finalizing[$post_id] = true;
     try {
       $acf_context = cf_tmrb_acf_post_context($post_id);
-      cf_tmrb_sync_post_acf_raw_references($post_id, $acf_payload, cf_tmrb_post_meta_snapshot($post_id), $acf_context);
+      if (!empty($acf_payload)) {
+        cf_tmrb_sync_post_acf_raw_references($post_id, $acf_payload, cf_tmrb_post_meta_snapshot($post_id), $acf_context);
+      }
 
       if (function_exists('acf_flush_value_cache')) {
         acf_flush_value_cache($post_id);
@@ -1144,13 +1691,71 @@ add_filter('rest_request_before_callbacks', function ($response, $handler, $requ
   $route = $request->get_route();
   if (!is_string($route) || strpos($route, '/wp/v2/') !== 0) return $response;
 
-  $acf = cf_tmrb_acf_payload_from_rest_request($request, $handler);
-  if (is_array($acf)) {
-    $request->set_param('acf', cf_tmrb_sanitize_deep($acf));
-  }
+  // meta_all/meta_all_flat payloads are saved by the bridge. Do not promote
+  // them into ACF's native REST writer; flexible-content rows can otherwise be
+  // stored as full row arrays in the raw layout meta before the response loads.
 
   return $response;
 }, 9, 3);
+
+if (!function_exists('cf_tmrb_post_from_rest_response')) {
+  function cf_tmrb_post_from_rest_response($response, $request) {
+    if (!($request instanceof WP_REST_Request)) return null;
+
+    $data = null;
+    if ($response instanceof WP_REST_Response || $response instanceof WP_HTTP_Response) {
+      $data = $response->get_data();
+    } elseif (is_array($response)) {
+      $data = $response;
+    }
+
+    $post_id = 0;
+    if (is_array($data) && isset($data['id'])) {
+      $post_id = absint($data['id']);
+    }
+
+    if (!$post_id) {
+      $route = $request->get_route();
+      if (is_string($route) && preg_match('#/wp/v2/[^/]+/(\\d+)(?:/|$)#', $route, $matches)) {
+        $post_id = absint($matches[1]);
+      }
+    }
+
+    if (!$post_id) return null;
+
+    $post = get_post($post_id);
+    return $post instanceof WP_Post ? $post : null;
+  }
+}
+
+add_filter('rest_request_after_callbacks', function ($response, $handler, $request) {
+  if (!($request instanceof WP_REST_Request)) return $response;
+  if (is_wp_error($response)) return $response;
+  if (!in_array($request->get_method(), ['POST', 'PUT', 'PATCH'], true)) return $response;
+
+  $route = $request->get_route();
+  if (!is_string($route) || strpos($route, '/wp/v2/') !== 0) return $response;
+
+  $has_bridge_payload = is_array($request->get_param('meta_all'))
+    || is_array($request->get_param('meta_all_flat'))
+    || is_array($request->get_param('acf'));
+
+  $meta = $request->get_param('meta');
+  if (!$has_bridge_payload && is_array($meta)) {
+    $has_bridge_payload = (isset($meta['meta_all']) && is_array($meta['meta_all']))
+      || (isset($meta['meta_all_flat']) && is_array($meta['meta_all_flat']));
+  }
+
+  if (!$has_bridge_payload) return $response;
+
+  $post = cf_tmrb_post_from_rest_response($response, $request);
+  if (!($post instanceof WP_Post)) return $response;
+
+  $applied_meta_payload = cf_tmrb_apply_meta_payload_updates($post, $request);
+  cf_tmrb_finalize_post_acf_rest_payload($post, $request, $applied_meta_payload || is_array($request->get_param('acf')));
+
+  return $response;
+}, 20, 3);
 
 if (!function_exists('cf_tmrb_should_expand_rest_meta_field')) {
   /**
@@ -1556,11 +2161,39 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
     $post_id = (int) $post_obj->ID;
     if (!current_user_can('edit_post', $post_id)) return new WP_Error('rest_forbidden','Insufficient permissions.',['status'=>403]);
     if (!is_array($value)) return new WP_Error('rest_invalid_param','meta_all must be an object.',['status'=>400]);
+
+    $grouped_acf_input = cf_tmrb_extract_grouped_acf_payload($value);
+    $explicit_meta_keys = [];
+    foreach ($value as $explicit_key => $_explicit_value) {
+      if ((string) $explicit_key === 'acf') continue;
+      $explicit_meta_keys[cf_tmrb_normalize_key($explicit_key)] = true;
+    }
+
     $value = cf_tmrb_expand_nested_acf_meta_payload($value);
 
     $acf_context = cf_tmrb_acf_post_context($post_id);
     $acf_save_values = [];
     $acf_touched = false;
+    $admin_saved_acf_keys = [];
+
+    if (is_array($grouped_acf_input) && !empty($grouped_acf_input)) {
+      foreach ($grouped_acf_input as $acf_key => $_acf_value) {
+        $admin_saved_acf_keys[cf_tmrb_normalize_key($acf_key)] = true;
+      }
+
+      $prepared_admin_acf_keys = [];
+      if (cf_tmrb_save_acf_payload_like_admin($post_id, $grouped_acf_input, $acf_context, $prepared_admin_acf_keys)) {
+        foreach ($prepared_admin_acf_keys as $acf_key) {
+          $admin_saved_acf_keys[cf_tmrb_normalize_key($acf_key)] = true;
+        }
+      }
+
+      foreach (cf_tmrb_raw_store_acf_flexible_payload($post_id, $grouped_acf_input, $acf_context) as $acf_key) {
+        $admin_saved_acf_keys[cf_tmrb_normalize_key($acf_key)] = true;
+      }
+
+      cf_tmrb_sync_post_acf_raw_references($post_id, $grouped_acf_input, cf_tmrb_post_meta_snapshot($post_id), $acf_context);
+    }
 
     // Caller is authorized -> allow private and public keys alike.
     $existing = [];
@@ -1579,6 +2212,9 @@ if (!function_exists('cf_tmrb_update_post_meta_all_payload')) {
       foreach ($aliases as $from => $to) {
         if ($nk === $from) { $nk = $to; break; }
         if (strpos($nk, $from) === 0) { $nk = $to . substr($nk, strlen($from)); break; }
+      }
+      if (isset($admin_saved_acf_keys[$nk]) && !isset($explicit_meta_keys[$nk])) {
+        continue;
       }
       $normalized_input[$nk] = $v;
     }
@@ -1713,20 +2349,49 @@ if (!function_exists('cf_tmrb_update_post_acf_payload')) {
   }
 }
 
-if (!function_exists('cf_tmrb_apply_nested_meta_payload_updates')) {
-  function cf_tmrb_apply_nested_meta_payload_updates($post_obj, $request) {
+if (!function_exists('cf_tmrb_apply_meta_payload_updates')) {
+  function cf_tmrb_apply_meta_payload_updates($post_obj, $request) {
     if (!($post_obj instanceof WP_Post) || !($request instanceof WP_REST_Request)) return;
 
+    static $applied_requests = [];
+    $request_token = (int) $post_obj->ID . ':' . spl_object_hash($request);
+    if (isset($applied_requests[$request_token])) return false;
+    $applied_requests[$request_token] = true;
+
+    $applied = false;
+
+    $meta_all = $request->get_param('meta_all');
+    if (is_array($meta_all)) {
+      cf_tmrb_update_post_meta_all_payload($meta_all, $post_obj);
+      $applied = true;
+    }
+
+    $meta_all_flat = $request->get_param('meta_all_flat');
+    if (is_array($meta_all_flat)) {
+      cf_tmrb_update_post_meta_all_payload($meta_all_flat, $post_obj);
+      $applied = true;
+    }
+
     $meta = $request->get_param('meta');
-    if (!is_array($meta)) return;
+    if (!is_array($meta)) return $applied;
 
     if (isset($meta['meta_all']) && is_array($meta['meta_all'])) {
       cf_tmrb_update_post_meta_all_payload($meta['meta_all'], $post_obj);
+      $applied = true;
     }
 
     if (isset($meta['meta_all_flat']) && is_array($meta['meta_all_flat'])) {
       cf_tmrb_update_post_meta_all_payload($meta['meta_all_flat'], $post_obj);
+      $applied = true;
     }
+
+    return $applied;
+  }
+}
+
+if (!function_exists('cf_tmrb_apply_nested_meta_payload_updates')) {
+  function cf_tmrb_apply_nested_meta_payload_updates($post_obj, $request) {
+    cf_tmrb_apply_meta_payload_updates($post_obj, $request);
   }
 }
 
@@ -1824,8 +2489,8 @@ add_action('rest_api_init', function () {
 
   foreach ($pts as $pt) {
     add_action("rest_after_insert_{$pt}", function($post, $request, $creating) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-      cf_tmrb_apply_nested_meta_payload_updates($post, $request);
-      cf_tmrb_finalize_post_acf_rest_payload($post, $request);
+      $applied_meta_payload = cf_tmrb_apply_meta_payload_updates($post, $request);
+      cf_tmrb_finalize_post_acf_rest_payload($post, $request, $applied_meta_payload);
     }, 15, 3);
   }
 

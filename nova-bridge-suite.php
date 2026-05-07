@@ -345,14 +345,44 @@ function nova_bridge_suite_get_cpt_module_keys_for_core_rest_route( string $rout
     $module_keys = [];
 
     if ( in_array( $rest_base, nova_bridge_suite_get_managed_blog_rest_bases(), true ) ) {
+        $module_keys[] = '__core_bridge';
         $module_keys[] = 'custom_post_types';
     }
 
     if ( $rest_base === nova_bridge_suite_get_service_page_rest_base() ) {
+        $module_keys[] = '__core_bridge';
         $module_keys[] = 'service_page_cpt';
     }
 
     return array_values( array_unique( $module_keys ) );
+}
+
+function nova_bridge_suite_should_load_core_bridge_for_rest_route( string $route ): bool {
+    $route = trim( $route, '/' );
+
+    if ( '' === $route ) {
+        return false;
+    }
+
+    return nova_bridge_suite_rest_route_matches( $route, 'wp/v2' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/v1' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/v2' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/v3' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/store/v1' );
+}
+
+function nova_bridge_suite_is_woocommerce_product_category_rest_route( string $route ): bool {
+    return nova_bridge_suite_rest_route_matches( $route, 'wp/v2/product_cat' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/v1/products/categories' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/v2/products/categories' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/v3/products/categories' )
+        || nova_bridge_suite_rest_route_matches( $route, 'wc/store/v1/products/categories' );
+}
+
+function nova_bridge_suite_get_target_taxonomy_for_rest_route(): string {
+    $taxonomy = nova_bridge_suite_get_request_value( 'taxonomy' );
+
+    return is_string( $taxonomy ) ? sanitize_key( $taxonomy ) : '';
 }
 
 function nova_bridge_suite_collect_admin_content_write_post_ids(): array {
@@ -396,6 +426,60 @@ function nova_bridge_suite_get_admin_content_write_module_keys(): ?array {
     $requested_post_type = nova_bridge_suite_get_query_or_post_request_value( 'post_type' );
     if ( is_string( $requested_post_type ) && '' !== trim( $requested_post_type ) ) {
         $module_keys = array_merge( $module_keys, nova_bridge_suite_get_module_keys_for_post_type( $requested_post_type ) );
+    }
+
+    return array_values( array_unique( $module_keys ) );
+}
+
+function nova_bridge_suite_get_admin_content_screen_module_keys(): ?array {
+    if ( ! is_admin() ) {
+        return null;
+    }
+
+    if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+        return null;
+    }
+
+    if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+        return null;
+    }
+
+    $request_uri = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] )
+        ? rawurldecode( (string) $_SERVER['REQUEST_URI'] )
+        : '';
+
+    $is_post_screen = false !== strpos( $request_uri, '/wp-admin/post.php' )
+        || false !== strpos( $request_uri, '/wp-admin/post-new.php' )
+        || false !== strpos( $request_uri, '/wp-admin/edit.php' );
+
+    $is_term_screen = false !== strpos( $request_uri, '/wp-admin/edit-tags.php' )
+        || false !== strpos( $request_uri, '/wp-admin/term.php' );
+
+    if ( ! $is_post_screen && ! $is_term_screen ) {
+        return null;
+    }
+
+    $module_keys = [];
+
+    if ( $is_post_screen ) {
+        foreach ( nova_bridge_suite_collect_admin_content_write_post_ids() as $post_id ) {
+            $post_type = get_post_type( $post_id );
+            if ( is_string( $post_type ) ) {
+                $module_keys = array_merge( $module_keys, nova_bridge_suite_get_module_keys_for_post_type( $post_type ) );
+            }
+        }
+
+        $requested_post_type = nova_bridge_suite_get_query_or_post_request_value( 'post_type' );
+        if ( is_string( $requested_post_type ) && '' !== trim( $requested_post_type ) ) {
+            $module_keys = array_merge( $module_keys, nova_bridge_suite_get_module_keys_for_post_type( $requested_post_type ) );
+        }
+    }
+
+    if ( $is_term_screen ) {
+        $taxonomy = nova_bridge_suite_get_query_or_post_request_value( 'taxonomy' );
+        if ( 'product_cat' === $taxonomy ) {
+            $module_keys[] = 'woocommerce_rich_text';
+        }
     }
 
     return array_values( array_unique( $module_keys ) );
@@ -472,8 +556,10 @@ function nova_bridge_suite_get_targeted_rest_module_keys( string $route ): ?arra
 
     if ( nova_bridge_suite_rest_route_matches( $route, 'cf-bridge/v1' ) ) {
         $module_keys = [ '__core_bridge' ];
+    } elseif ( nova_bridge_suite_is_woocommerce_product_category_rest_route( $route ) ) {
+        $module_keys = [ '__core_bridge', 'woocommerce_rich_text' ];
     } elseif ( nova_bridge_suite_rest_route_matches( $route, 'nova-post-resolver/v1' ) ) {
-        $module_keys = [ '__post_resolver' ];
+        $module_keys = [ '__post_resolver', 'custom_post_types', 'service_page_cpt' ];
     } elseif ( nova_bridge_suite_rest_route_matches( $route, 'seor-bridge/v1' ) ) {
         $module_keys = [ 'pagebuilder_elementor' ];
     } elseif ( nova_bridge_suite_rest_route_matches( $route, 'polylang-translations/v1' ) ) {
@@ -510,6 +596,17 @@ function nova_bridge_suite_get_targeted_rest_module_keys( string $route ): ?arra
         $module_keys = nova_bridge_suite_add_cpt_dependencies_for_rest_route( $module_keys, $route );
     }
 
+    if (
+        (
+            nova_bridge_suite_rest_route_matches( $route, 'polylang-translations/v1' )
+            || nova_bridge_suite_rest_route_matches( $route, 'wpml-translations/v1' )
+        )
+        && 'product_cat' === nova_bridge_suite_get_target_taxonomy_for_rest_route()
+    ) {
+        $module_keys[] = '__core_bridge';
+        $module_keys[] = 'woocommerce_rich_text';
+    }
+
     return array_values( array_unique( $module_keys ) );
 }
 
@@ -525,17 +622,64 @@ function nova_bridge_suite_load_module_file( string $relative_path ): void {
     }
 }
 
-function nova_bridge_suite_load_selected_modules( array $module_keys ): void {
+function nova_bridge_suite_load_settings_runtime(): void {
     require_once NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'includes/settings.php';
+}
+
+function nova_bridge_suite_load_core_support( bool $bootstrap_wpml_support = false ): void {
+    nova_bridge_suite_load_settings_runtime();
     require_once NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'includes/class-nova-bridge-suite-wpml-support.php';
+
+    if ( $bootstrap_wpml_support ) {
+        Nova_Bridge_Suite_WPML_Support::bootstrap();
+    } elseif ( method_exists( 'Nova_Bridge_Suite_WPML_Support', 'bootstrap_runtime' ) ) {
+        Nova_Bridge_Suite_WPML_Support::bootstrap_runtime();
+    }
+}
+
+function nova_bridge_suite_load_core_bridge_runtime( bool $bootstrap_wpml_support = false ): void {
+    if ( $bootstrap_wpml_support ) {
+        nova_bridge_suite_load_core_support( true );
+    } else {
+        nova_bridge_suite_load_settings_runtime();
+    }
+
+    nova_bridge_suite_load_module_file( 'modules/bridge/nova-bridge.php' );
+}
+
+function nova_bridge_suite_load_selected_modules( array $module_keys ): void {
+    $module_keys = array_values( array_unique( array_filter( array_map( 'strval', $module_keys ) ) ) );
+
+    if ( empty( $module_keys ) ) {
+        return;
+    }
+
+    nova_bridge_suite_load_settings_runtime();
 
     $settings    = nova_bridge_suite_get_settings();
     $definitions = nova_bridge_suite_module_definitions();
     $conflicts   = nova_bridge_suite_get_module_conflicts();
+    $loadable    = [];
+
+    foreach ( $module_keys as $module_key ) {
+        if ( 0 === strpos( $module_key, '__' ) ) {
+            continue;
+        }
+
+        if ( empty( $definitions[ $module_key ] ) || empty( $settings[ $module_key ] ) || ! empty( $conflicts[ $module_key ] ) ) {
+            continue;
+        }
+
+        $loadable[ $module_key ] = $definitions[ $module_key ]['path'] ?? '';
+    }
+
+    if ( ! empty( $loadable ) ) {
+        nova_bridge_suite_load_core_support( false );
+    }
 
     foreach ( $module_keys as $module_key ) {
         if ( '__core_bridge' === $module_key ) {
-            nova_bridge_suite_load_module_file( 'modules/bridge/nova-bridge.php' );
+            nova_bridge_suite_load_core_bridge_runtime();
             continue;
         }
 
@@ -544,11 +688,11 @@ function nova_bridge_suite_load_selected_modules( array $module_keys ): void {
             continue;
         }
 
-        if ( empty( $definitions[ $module_key ] ) || empty( $settings[ $module_key ] ) || ! empty( $conflicts[ $module_key ] ) ) {
+        if ( empty( $loadable[ $module_key ] ) ) {
             continue;
         }
 
-        nova_bridge_suite_load_module_file( $definitions[ $module_key ]['path'] ?? '' );
+        nova_bridge_suite_load_module_file( $loadable[ $module_key ] );
     }
 }
 
@@ -574,14 +718,30 @@ if ( null !== $nova_bridge_suite_admin_content_write_module_keys ) {
     return;
 }
 
+$nova_bridge_suite_admin_content_screen_module_keys = nova_bridge_suite_get_admin_content_screen_module_keys();
+if ( null !== $nova_bridge_suite_admin_content_screen_module_keys ) {
+    if ( ! empty( $nova_bridge_suite_admin_content_screen_module_keys ) ) {
+        nova_bridge_suite_load_selected_modules( $nova_bridge_suite_admin_content_screen_module_keys );
+    }
+
+    return;
+}
+
 if ( nova_bridge_suite_is_core_rest_content_write_request() ) {
-    $core_rest_cpt_module_keys = nova_bridge_suite_get_cpt_module_keys_for_core_rest_route( nova_bridge_suite_get_rest_route_path() );
+    $core_rest_route = nova_bridge_suite_get_rest_route_path();
+
+    if ( nova_bridge_suite_is_woocommerce_product_category_rest_route( $core_rest_route ) ) {
+        nova_bridge_suite_load_selected_modules( [ '__core_bridge', 'woocommerce_rich_text' ] );
+        return;
+    }
+
+    $core_rest_cpt_module_keys = nova_bridge_suite_get_cpt_module_keys_for_core_rest_route( $core_rest_route );
     if ( ! empty( $core_rest_cpt_module_keys ) ) {
         nova_bridge_suite_load_selected_modules( $core_rest_cpt_module_keys );
     }
 
     if ( nova_bridge_suite_core_rest_write_uses_bridge_payload() ) {
-        require_once NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'modules/bridge/nova-bridge.php';
+        nova_bridge_suite_load_core_bridge_runtime();
     }
 
     return;
@@ -592,13 +752,14 @@ if ( nova_bridge_suite_maybe_handle_targeted_rest_request() ) {
 }
 
 if ( nova_bridge_suite_is_rest_request() ) {
+    if ( nova_bridge_suite_should_load_core_bridge_for_rest_route( nova_bridge_suite_get_rest_route_path() ) ) {
+        nova_bridge_suite_load_core_bridge_runtime();
+    }
+
     return;
 }
 
-require_once NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'includes/settings.php';
-require_once NOVA_BRIDGE_SUITE_PLUGIN_DIR . 'includes/class-nova-bridge-suite-wpml-support.php';
-
-Nova_Bridge_Suite_WPML_Support::bootstrap();
+nova_bridge_suite_load_core_support( true );
 
 $nova_bridge_suite_should_load_update_checker = is_admin() || ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() );
 
