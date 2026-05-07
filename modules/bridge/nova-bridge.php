@@ -483,6 +483,14 @@ if (!function_exists('cf_tmrb_acf_field_groups_for_context')) {
     return is_array($value) && cf_tmrb_is_list_array($value) ? $value : null;
   }
 
+  function cf_tmrb_acf_value_looks_like_flexible_rows($value) {
+    $rows = cf_tmrb_acf_list_rows($value);
+    if (!is_array($rows) || empty($rows)) return false;
+
+    $first = reset($rows);
+    return is_array($first) && array_key_exists('acf_fc_layout', $first);
+  }
+
   function cf_tmrb_acf_layout_key_by_name($field, $layout_name) {
     if (!is_array($field) || empty($field['layouts']) || !is_array($field['layouts'])) return '';
     $layout_name = (string) $layout_name;
@@ -608,11 +616,7 @@ if (!function_exists('cf_tmrb_acf_field_groups_for_context')) {
     if (!is_array($field) || empty($field['type'])) return false;
 
     if ((string) $field['type'] === 'flexible_content') {
-      $rows = cf_tmrb_acf_list_rows($value);
-      if (!is_array($rows)) return false;
-
-      $first = reset($rows);
-      if (!is_array($first) || !array_key_exists('acf_fc_layout', $first)) return false;
+      if (!cf_tmrb_acf_value_looks_like_flexible_rows($value)) return false;
 
       return cf_tmrb_acf_raw_store_flexible_content($post_id, $field, $value);
     }
@@ -778,7 +782,17 @@ if (!function_exists('cf_tmrb_acf_field_groups_for_context')) {
     if (!function_exists('update_field')) return false;
 
     $field = cf_tmrb_acf_field_for_selector($selector, $acf_post_id, $context);
-    if (!is_array($field) || empty($field['key'])) return false;
+    if (!is_array($field) || empty($field['key'])) {
+      if (cf_tmrb_acf_value_looks_like_flexible_rows($value)) {
+        $raw_storage_field = cf_tmrb_acf_raw_storage_field_for_selector($selector, $acf_post_id, $context);
+        if (is_array($raw_storage_field) && !empty($raw_storage_field['key']) && cf_tmrb_acf_raw_store_value_if_needed($acf_post_id, $raw_storage_field, $value)) {
+          if ($acf_touched !== null) $acf_touched = true;
+          return $raw_storage_field;
+        }
+      }
+
+      return false;
+    }
     if ($acf_touched !== null) $acf_touched = true;
 
     $raw_storage_field = $field;
