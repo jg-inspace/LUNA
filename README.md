@@ -4,7 +4,7 @@
 - Requires at least: 6.0
 - Tested up to: 6.9
 - Requires PHP: 7.4
-- Stable tag: 2.4.7
+- Stable tag: 2.4.9
 - License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -46,6 +46,15 @@ No. It works alongside builders like Avada, Elementor, WPBakery, and more. NOVA 
 Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is active you can also enable the optional rich text field module for category pages - in case your category page template still needs this.
 
 ## Changelog
+
+### 2.4.9
+
+- Fix Elementor bridge field values being split into arrays by WordPress REST validation when posting Polylang + Elementor translated pages.
+- Preserve raw JSON request payloads for Elementor bridge create/update calls so translated widget text is saved as strings and renders correctly on the frontend.
+
+### 2.4.8
+
+- Keep Blog and Service CPTs visible in the WordPress REST types endpoint after the route-aware loading changes in 2.4.7.
 
 ### 2.4.7
 

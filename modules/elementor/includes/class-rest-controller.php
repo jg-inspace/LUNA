@@ -488,7 +488,20 @@ class Rest_Controller extends WP_REST_Controller {
 	 * @return array
 	 */
 	private function extract_payload_from_request( WP_REST_Request $request ) {
-		$params = $request->get_json_params();
+		$raw_body = $request->get_body();
+		$params   = null;
+
+		if ( is_string( $raw_body ) && '' !== trim( $raw_body ) ) {
+			$decoded = json_decode( $raw_body, true );
+
+			if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
+				$params = $decoded;
+			}
+		}
+
+		if ( null === $params ) {
+			$params = $request->get_json_params();
+		}
 
 		if ( empty( $params ) ) {
 			$params = array();
