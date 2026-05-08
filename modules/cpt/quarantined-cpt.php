@@ -9229,10 +9229,13 @@ final class Plugin {
 			return [];
 		}
 
-		$rename_map = $this->capture_cpt_slug_rename_map( $value );
-		$clean = [];
+		$rename_map                 = $this->capture_cpt_slug_rename_map( $value );
+		$enforce_route_conflicts    = $this->should_enforce_cpt_definition_route_conflicts();
+		$existing_slugs             = array_fill_keys( $this->get_saved_cpt_definition_slugs(), true );
+		$saved_definitions_by_index = $enforce_route_conflicts ? $this->get_saved_cpt_definitions_by_index() : [];
+		$clean                      = [];
 
-		foreach ( $value as $definition ) {
+		foreach ( $value as $index => $definition ) {
 			if ( ! is_array( $definition ) ) {
 				continue;
 			}
@@ -9252,6 +9255,40 @@ final class Plugin {
 
 			if ( isset( $clean[ $slug ] ) ) {
 				continue;
+			}
+
+			if ( $enforce_route_conflicts && \function_exists( 'nova_bridge_suite_find_route_base_conflict' ) ) {
+				$exclude_post_types = isset( $existing_slugs[ $slug ] ) ? [ $slug ] : [];
+				$conflict           = \nova_bridge_suite_find_route_base_conflict(
+					$slug,
+					[
+						'exclude_post_types' => $exclude_post_types,
+					]
+				);
+
+				if ( null !== $conflict ) {
+					if ( \function_exists( 'add_settings_error' ) ) {
+						\add_settings_error(
+							self::OPTION_CPTS,
+							'quarantined_cpt_bodyclean_cpt_conflict_' . sanitize_key( $slug ),
+							is_string( $conflict['message'] ?? null )
+								? $conflict['message']
+								: sprintf(
+									/* translators: %s: attempted CPT base slug. */
+									__( 'The CPT base slug "%s" is already in use. Choose a unique base slug.', 'nova-bridge-suite' ),
+									$slug
+								),
+							'error'
+						);
+					}
+
+					$saved_definition = $saved_definitions_by_index[ (string) $index ] ?? null;
+					if ( is_array( $saved_definition ) && ! empty( $saved_definition['slug'] ) && ! isset( $clean[ $saved_definition['slug'] ] ) ) {
+						$clean[ $saved_definition['slug'] ] = $saved_definition;
+					}
+
+					continue;
+				}
 			}
 
 			$singular = $this->sanitize_text_option( $definition['singular'] ?? '' );
@@ -9302,6 +9339,122 @@ final class Plugin {
 		}
 
 		return $clean_values;
+	}
+
+	private function should_enforce_cpt_definition_route_conflicts(): bool {
+		if ( ! is_admin() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return false;
+		}
+
+		$option_page = isset( $_POST['option_page'] ) && is_scalar( $_POST['option_page'] )
+			? sanitize_key( wp_unslash( (string) $_POST['option_page'] ) )
+			: '';
+		$action      = isset( $_POST['action'] ) && is_scalar( $_POST['action'] )
+			? sanitize_key( wp_unslash( (string) $_POST['action'] ) )
+			: '';
+
+		return 'quarantined_cpt_bodyclean' === $option_page
+			&& 'update' === $action
+			&& isset( $_POST[ self::OPTION_CPTS ] );
+	}
+
+	/**
+	 * Returns saved NOVA CPT definitions keyed by their settings row index.
+	 *
+	 * @return array<string,array<string,string>>
+	 */
+	private function get_saved_cpt_definitions_by_index(): array {
+		$current_definitions = get_option( self::OPTION_CPTS, [] );
+
+		if ( ! is_array( $current_definitions ) ) {
+			return [];
+		}
+
+		$definitions = [];
+
+		foreach ( $current_definitions as $index => $definition ) {
+			if ( ! is_array( $definition ) ) {
+				continue;
+			}
+
+			$normalized = $this->normalize_cpt_definition_payload( $definition );
+			if ( ! empty( $normalized ) ) {
+				$definitions[ (string) $index ] = $normalized;
+			}
+		}
+
+		return $definitions;
+	}
+
+	/**
+	 * Returns slugs already owned by NOVA before the current settings save.
+	 *
+	 * @return array<int,string>
+	 */
+	private function get_saved_cpt_definition_slugs(): array {
+		$slugs               = [];
+		$current_definitions = get_option( self::OPTION_CPTS, null );
+
+		if ( is_array( $current_definitions ) ) {
+			foreach ( $current_definitions as $definition ) {
+				if ( ! is_array( $definition ) ) {
+					continue;
+				}
+
+				$slug = $this->extract_definition_slug( $definition );
+				if ( '' !== $slug ) {
+					$slugs[] = $slug;
+				}
+			}
+		}
+
+		if ( null === $current_definitions || ! is_array( $current_definitions ) ) {
+			$legacy_slug = $this->extract_definition_slug(
+				[
+					'slug' => get_option( self::OPTION_CPT_SLUG, '' ),
+				]
+			);
+
+			if ( '' !== $legacy_slug ) {
+				$slugs[] = $legacy_slug;
+			}
+		}
+
+		return array_values( array_unique( $slugs ) );
+	}
+
+	/**
+	 * Normalizes a stored CPT definition payload without checking route conflicts.
+	 *
+	 * @param array<string,mixed> $definition Raw definition payload.
+	 * @return array<string,string>
+	 */
+	private function normalize_cpt_definition_payload( array $definition ): array {
+		$slug = $this->extract_definition_slug( $definition );
+
+		if ( '' === $slug ) {
+			return [];
+		}
+
+		$singular = $this->sanitize_text_option( $definition['singular'] ?? '' );
+		$plural   = $this->sanitize_text_option( $definition['plural'] ?? '' );
+
+		if ( '' === $singular ) {
+			$singular = ucwords( str_replace( [ '-', '_' ], ' ', $slug ) );
+		}
+
+		if ( '' === $plural ) {
+			$plural = $singular . 's';
+		}
+
+		return [
+			'type'        => $slug,
+			'slug'        => $slug,
+			'rest_base'   => $slug,
+			'singular'    => $singular,
+			'plural'      => $plural,
+			'schema_type' => $this->sanitize_article_schema_type_option( $definition['schema_type'] ?? self::DEFAULT_ARTICLE_SCHEMA_TYPE ),
+		];
 	}
 
 	public function sanitize_selector_input( $value ): string {
