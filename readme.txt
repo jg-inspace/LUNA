@@ -4,7 +4,7 @@ Tags: seo, automation, content, rest-api, page builder
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.5.3
+Stable tag: 2.5.4
 License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -41,6 +41,13 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 1. NOVA Settings screen with module toggles.
 
 == Changelog ==
+
+= 2.5.4 =
+* Show a clear Service Page editor error when active CTA sections are empty, and keep saving locked until CTA content is added or global CTAs are configured.
+* Return the same CTA-specific REST error if a Service Page save request is submitted with empty required CTA sections.
+* Keep Astra submenu backgrounds visible on NOVA Blog CPT pages.
+* Prevent Astra archive layout classes from squeezing NOVA Blog CPT archive cards.
+* Add optional Body Clean allowlist selectors for preserving extra frontend elements.
 
 = 2.5.3 =
 * Improves reliability for ACF flexible-content fields saved through REST acf, meta_all, and meta_all_flat payloads.

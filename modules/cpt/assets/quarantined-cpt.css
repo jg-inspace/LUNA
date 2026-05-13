@@ -17,9 +17,7 @@ body.quarantined-cpt-author .quarantined-cpt__inner {
 	padding-top: calc(var(--quarantined-cpt-header-offset, 2rem) + (var(--quarantined-cpt-base-padding) * 0.5));
 }
 
-body.quarantined-cpt-bodyclean > *:not(header):not(nav):not(footer):not(.site-header):not(.main-header):not(.top-bar):not(.topbar):not(.navbar):not(.navigation):not(.site-navigation):not(.main-navigation):not(.menu):not(.menu-wrapper):not(#wpadminbar):not(.wpadminbar):not(.elementor-location-header):not(.elementor-location-top-bar):not(.qodef-custom-cursor):not(link[rel="stylesheet"]):not(style):not(script):not(main.quarantined-cpt):not([data-quarantined-keep]) {
-	display: none !important;
-}
+/* Body-clean root hiding is generated inline so custom allowlist selectors can be included. */
 
 body.quarantined-cpt-bodyclean > main.quarantined-cpt,
 body.quarantined-cpt-bodyclean > footer,
@@ -51,6 +49,15 @@ body.quarantined-cpt-bodyclean > .elementor-location-footer,
 body.quarantined-cpt-bodyclean > .wp-site-blocks,
 body.quarantined-cpt-bodyclean > #wp-site-blocks {
 	display: block !important;
+}
+
+body.quarantined-cpt-view .site-header .main-header-menu .menu-item .sub-menu,
+body.quarantined-cpt-archive .site-header .main-header-menu .menu-item .sub-menu,
+body.quarantined-cpt-author .site-header .main-header-menu .menu-item .sub-menu,
+body.quarantined-cpt-view .site-header .main-header-menu .menu-item .sub-menu .menu-link,
+body.quarantined-cpt-archive .site-header .main-header-menu .menu-item .sub-menu .menu-link,
+body.quarantined-cpt-author .site-header .main-header-menu .menu-item .sub-menu .menu-link {
+	background-color: var(--ast-global-color-0, #002e62) !important;
 }
 
 body.admin-bar.quarantined-cpt-view .quarantined-cpt__inner,
@@ -826,24 +833,13 @@ body.admin-bar.quarantined-cpt-author .quarantined-cpt__inner {
 
 .quarantined-cpt__grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 360px));
 	gap: clamp(1.25rem, 3vw, 2rem);
+	justify-content: start;
 	margin: 2rem 0;
 	/* Prevent parent theme flex/grid rules interfering */
 	width: 100%;
 	box-sizing: border-box;
-}
-
-@media screen and (min-width: 900px) {
-	.quarantined-cpt__grid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-}
-
-@media screen and (min-width: 600px) and (max-width: 899px) {
-	.quarantined-cpt__grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
 }
 
 .quarantined-cpt__card {
@@ -856,6 +852,16 @@ body.admin-bar.quarantined-cpt-author .quarantined-cpt__inner {
 	overflow: hidden;
 	transition: transform 0.25s ease, box-shadow 0.25s ease;
 	height: 100%;
+}
+
+.quarantined-cpt__grid > .quarantined-cpt__card {
+	float: none !important;
+	width: auto !important;
+	min-width: 0;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	box-sizing: border-box;
 }
 
 .quarantined-cpt__card:hover,

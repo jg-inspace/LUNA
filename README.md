@@ -4,7 +4,7 @@
 - Requires at least: 6.0
 - Tested up to: 6.9
 - Requires PHP: 7.4
-- Stable tag: 2.5.3
+- Stable tag: 2.5.4
 - License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -46,6 +46,14 @@ No. It works alongside builders like Avada, Elementor, WPBakery, and more. NOVA 
 Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is active you can also enable the optional rich text field module for category pages - in case your category page template still needs this.
 
 ## Changelog
+
+### 2.5.4
+
+- Show a clear Service Page editor error when active CTA sections are empty, and keep saving locked until CTA content is added or global CTAs are configured.
+- Return the same CTA-specific REST error if a Service Page save request is submitted with empty required CTA sections.
+- Keep Astra submenu backgrounds visible on NOVA Blog CPT pages.
+- Prevent Astra archive layout classes from squeezing NOVA Blog CPT archive cards.
+- Add optional Body Clean allowlist selectors for preserving extra frontend elements.
 
 ### 2.5.3
 

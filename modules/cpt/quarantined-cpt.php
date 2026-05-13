@@ -43,6 +43,11 @@ final class Plugin {
 	private const OPTION_EXCLUDE_SELECTORS = 'quarantined_cpt_bodyclean_exclude_selectors';
 
 	/**
+	 * Option key used to store custom allowlist selectors.
+	 */
+	private const OPTION_ALLOW_SELECTORS = 'quarantined_cpt_bodyclean_allow_selectors';
+
+	/**
 	 * Option key used to store component visibility toggles.
 	 */
 	private const OPTION_COMPONENT_VISIBILITY = 'quarantined_cpt_bodyclean_components';
@@ -2408,6 +2413,14 @@ final class Plugin {
 			esc_attr( $offset )
 		);
 
+		if ( $bodyclean_active ) {
+			$bodyclean_display_rules = $this->build_bodyclean_root_display_rules();
+
+			if ( '' !== $bodyclean_display_rules ) {
+				$inline_css .= "\n" . $bodyclean_display_rules;
+			}
+		}
+
 		$style_post_type = $this->detect_component_post_type_context();
 		$style_settings  = $this->get_blog_style_settings_for_type( $style_post_type );
 		$component_order = $this->get_component_order_settings_for_type( $style_post_type );
@@ -3507,6 +3520,7 @@ final class Plugin {
 			'[data-quarantined-keep]',
 		];
 
+		$defaults = array_merge( $defaults, $this->get_custom_allow_selectors() );
 		$selectors = apply_filters( 'quarantined_cpt_bodyclean/allowed_dom_selectors', $defaults );
 
 		if ( ! is_array( $selectors ) ) {
@@ -7367,6 +7381,16 @@ final class Plugin {
 
 		register_setting(
 			'quarantined_cpt_bodyclean',
+			self::OPTION_ALLOW_SELECTORS,
+			[
+				'type'              => 'string',
+				'sanitize_callback' => [ $this, 'sanitize_selector_input' ],
+				'default'           => '',
+			]
+		);
+
+		register_setting(
+			'quarantined_cpt_bodyclean',
 			self::OPTION_COMPONENT_VISIBILITY,
 			[
 				'type'              => 'array',
@@ -8046,6 +8070,10 @@ final class Plugin {
 		$raw = get_option( self::OPTION_EXCLUDE_SELECTORS, '' );
 		$value = is_array( $raw ) ? implode( "\n", $raw ) : (string) $raw;
 		$value = trim( $value );
+
+		$allow_raw = get_option( self::OPTION_ALLOW_SELECTORS, '' );
+		$allow_value = is_array( $allow_raw ) ? implode( "\n", $allow_raw ) : (string) $allow_raw;
+		$allow_value = trim( $allow_value );
 
 		$component_order_labels = $this->get_component_order_labels();
 		$cta_defaults_by_cpt    = $this->get_blog_cta_overrides_by_cpt();
@@ -8928,6 +8956,18 @@ final class Plugin {
 								class="large-text code"
 								placeholder=".site-breadcrumbs&#10;.banner-wrapper"
 							><?php echo esc_textarea( $value ); ?></textarea>
+						</details>
+						<details class="quarantined-cpt-settings__dropdown quarantined-cpt-settings__dropdown--optional">
+							<summary><?php esc_html_e( 'Element Inclusions / Allowlist (optional)', 'nova-bridge-suite' ); ?></summary>
+							<p class="description"><?php esc_html_e( 'Use CSS selectors to preserve matching wrappers or elements when Body Clean is enabled. One selector per line.', 'nova-bridge-suite' ); ?></p>
+							<textarea
+								name="<?php echo esc_attr( self::OPTION_ALLOW_SELECTORS ); ?>"
+								id="quarantined-cpt-bodyclean-allow-selectors"
+								rows="10"
+								cols="70"
+								class="large-text code"
+								placeholder=".client-header-wrapper&#10;#site-shell"
+							><?php echo esc_textarea( $allow_value ); ?></textarea>
 						</details>
 					<?php else : ?>
 						<p class="description"><?php esc_html_e( 'CPT registration is currently disabled. Enable CPT registration above and save to unlock all CPT-specific settings.', 'nova-bridge-suite' ); ?></p>
@@ -10538,6 +10578,38 @@ final class Plugin {
 	}
 
 	/**
+	 * Retrieves custom allowlist selectors as an array.
+	 *
+	 * @return string[]
+	 */
+	private function get_custom_allow_selectors(): array {
+		$value = get_option( self::OPTION_ALLOW_SELECTORS, '' );
+
+		if ( is_array( $value ) ) {
+			$value = implode( "\n", $value );
+		}
+
+		$value = (string) $value;
+
+		$lines = array_filter(
+			array_map(
+				static function ( $line ) {
+					$line = trim( (string) $line );
+
+					if ( '' === $line ) {
+						return '';
+					}
+
+					return wp_strip_all_tags( $line );
+				},
+				preg_split( '/\r\n|\r|\n/', $value )
+			)
+		);
+
+		return apply_filters( 'quarantined_cpt_bodyclean/custom_allow_selectors', array_values( $lines ) );
+	}
+
+	/**
 	 * Builds explicit frontend override rules for filled blog design settings.
 	 *
 	 * These rules intentionally only render when a setting has an effective value,
@@ -10783,6 +10855,115 @@ final class Plugin {
 		if ( '' !== $card_radius ) {
 			$rules[] = ".quarantined-cpt .quarantined-cpt__card{\n\tborder-radius: var(--quarantined-cpt-card-radius) !important;\n}";
 		}
+
+		return implode( "\n", $rules );
+	}
+
+	/**
+	 * Builds the root-level Body Clean display rule with custom allowlist selectors.
+	 *
+	 * @return string
+	 */
+	private function build_bodyclean_root_display_rules(): string {
+		$defaults = [
+			'header',
+			'nav',
+			'footer',
+			'.site-header',
+			'.main-header',
+			'.top-bar',
+			'.topbar',
+			'.navbar',
+			'.navigation',
+			'.site-navigation',
+			'.main-navigation',
+			'.menu',
+			'.menu-wrapper',
+			'#wpadminbar',
+			'.wpadminbar',
+			'.elementor-location-header',
+			'.elementor-location-top-bar',
+			'.qodef-custom-cursor',
+			'link[rel="stylesheet"]',
+			'style',
+			'script',
+			'main.quarantined-cpt',
+			'[data-quarantined-keep]',
+			'#page',
+			'#content',
+			'#colophon',
+			'.site',
+			'.site-container',
+			'.site-content',
+			'.site-main',
+			'.site-footer',
+			'.content-area',
+			'.content',
+			'.main',
+			'.main-content',
+			'.footer',
+			'.colophon',
+			'.container',
+			'.container-fluid',
+			'.wrapper',
+			'.page-wrapper',
+			'.theme-wrapper',
+			'.elementor',
+			'.elementor-section-wrap',
+			'.elementor-kit__wrapper',
+			'.elementor-location-footer',
+			'.wp-site-blocks',
+			'#wp-site-blocks',
+		];
+		$has_selectors = [
+			':has( > main.quarantined-cpt )',
+			':has(main.quarantined-cpt)',
+		];
+
+		$selectors = array_merge( $defaults, $this->get_custom_allow_selectors() );
+		$selectors = apply_filters( 'quarantined_cpt_bodyclean/root_allow_selectors', $selectors, $this );
+
+		if ( ! is_array( $selectors ) ) {
+			$selectors = $defaults;
+		}
+
+		$selectors = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						static function ( $selector ) {
+							return is_string( $selector ) ? trim( $selector ) : '';
+						},
+						$selectors
+					)
+				)
+			)
+		);
+
+		if ( empty( $selectors ) ) {
+			return '';
+		}
+
+		$not_selectors = array_map(
+			static function ( string $selector ): string {
+				return ':not(' . $selector . ')';
+			},
+			$selectors
+		);
+
+		$rules = [
+			'body.quarantined-cpt-bodyclean > *' . implode( '', $not_selectors ) . " {\n\tdisplay: none !important;\n}",
+		];
+
+		$rules[] = implode(
+			",\n",
+			array_map(
+				static function ( string $selector ): string {
+					return 'body.quarantined-cpt-bodyclean > ' . $selector;
+				},
+				$has_selectors
+			)
+		) . " {\n\tdisplay: block !important;\n}";
 
 		return implode( "\n", $rules );
 	}
