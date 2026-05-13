@@ -15,6 +15,11 @@
 	padding-top: var(--service-cpt-header-offset, 0);
 }
 
+body.service-cpt .site-header .main-header-menu .menu-item .sub-menu,
+body.service-cpt .site-header .main-header-menu .menu-item .sub-menu .menu-link {
+	background-color: var(--ast-global-color-0, #002e62) !important;
+}
+
 .service-cpt__wrap > * {
 	max-width: var(--service-cpt-content-width, 1100px);
 	margin-left: auto;
