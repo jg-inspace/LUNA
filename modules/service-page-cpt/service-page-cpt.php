@@ -102,6 +102,7 @@ final class Plugin {
 	private const OPTION_ARCHIVE_RELATED_POSTS = 'service_cpt_archive_related_posts';
 	private const OPTION_ARCHIVE_SEO_TITLE = 'service_cpt_archive_seo_title';
 	private const OPTION_ARCHIVE_SEO_DESCRIPTION = 'service_cpt_archive_seo_description';
+	private const OPTION_ATTACHMENT_SLUG_MIGRATION = 'service_cpt_attachment_slug_migration_20260513';
 	private const DEFAULT_HEADER_OFFSET     = '6rem';
 	private const DEFAULT_SPACE_SCALE       = '0.9';
 	private const DEFAULT_SPACE_SECTION_PADDING = '3rem 1.25rem';
@@ -278,12 +279,14 @@ final class Plugin {
 		\add_action( 'init', [ $this, 'register_block' ] );
 		\add_action( 'init', [ $this, 'register_block_patterns' ] );
 		\add_action( 'init', [ $this, 'maybe_migrate_archive_placeholder_defaults' ], 30 );
+		\add_action( 'init', [ $this, 'maybe_normalize_attachment_conflicted_service_slugs' ], 40 );
 		\add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_front_assets' ] );
 		\add_action( 'enqueue_block_editor_assets', [ $this, 'enqueue_editor_assets' ] );
 		\add_action( 'wp', [ $this, 'maybe_override_faq_schema' ] );
 		\add_action( 'wp_head', [ $this, 'render_service_faq_schema' ], 9 );
 		\add_filter( 'template_include', [ $this, 'maybe_use_templates' ] );
 		\add_filter( 'body_class', [ $this, 'add_body_class' ] );
+		\add_filter( 'pre_wp_unique_post_slug', [ $this, 'allow_service_slug_without_attachment_conflict' ], 10, 6 );
 		\add_filter( 'enter_title_here', [ $this, 'title_placeholder' ], 10, 2 );
 		\add_filter( 'use_block_editor_for_post_type', [ $this, 'force_block_editor' ], 100, 2 );
 		\add_filter( 'gutenberg_can_edit_post_type', [ $this, 'force_block_editor' ], 100, 2 );
@@ -1655,6 +1658,146 @@ final class Plugin {
 
 	private function is_service_context(): bool {
 		return \is_singular( self::CPT ) || \is_post_type_archive( self::CPT );
+	}
+
+	public function allow_service_slug_without_attachment_conflict( $override, $slug, $post_id, $post_status, $post_type, $post_parent ) {
+		if ( null !== $override || self::CPT !== $post_type ) {
+			return $override;
+		}
+
+		$slug = \sanitize_title_with_dashes( (string) $slug );
+		if ( '' === $slug || $this->service_slug_is_reserved( $slug ) ) {
+			return $override;
+		}
+
+		if ( $this->service_slug_conflicts_with_service_page( $slug, (int) $post_id, (int) $post_parent ) ) {
+			return $override;
+		}
+
+		return $slug;
+	}
+
+	public function maybe_normalize_attachment_conflicted_service_slugs(): void {
+		if ( \get_option( self::OPTION_ATTACHMENT_SLUG_MIGRATION, false ) ) {
+			return;
+		}
+
+		if ( ! \is_admin() && ! ( \function_exists( 'wp_doing_cron' ) && \wp_doing_cron() ) ) {
+			return;
+		}
+
+		if ( ! \post_type_exists( self::CPT ) ) {
+			return;
+		}
+
+		$posts = \get_posts(
+			[
+				'post_type'              => self::CPT,
+				'post_status'            => 'any',
+				'posts_per_page'         => -1,
+				'fields'                 => 'all',
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+			]
+		);
+
+		foreach ( $posts as $post ) {
+			if ( ! $post instanceof \WP_Post ) {
+				continue;
+			}
+
+			$target_slug = $this->get_attachment_conflicted_service_base_slug( $post );
+			if ( '' === $target_slug ) {
+				continue;
+			}
+
+			\wp_update_post(
+				[
+					'ID'        => (int) $post->ID,
+					'post_name' => $target_slug,
+				]
+			);
+		}
+
+		\update_option( self::OPTION_ATTACHMENT_SLUG_MIGRATION, \gmdate( 'c' ), false );
+	}
+
+	private function get_attachment_conflicted_service_base_slug( \WP_Post $post ): string {
+		$current_slug = (string) $post->post_name;
+		if ( ! \preg_match( '/^(.+)-([0-9]+)$/', $current_slug, $matches ) ) {
+			return '';
+		}
+
+		$base_slug = \sanitize_title_with_dashes( (string) $matches[1] );
+		$suffix    = (int) $matches[2];
+		if ( '' === $base_slug || $suffix < 2 ) {
+			return '';
+		}
+
+		$title_slug = \sanitize_title_with_dashes( (string) $post->post_title );
+		if ( $base_slug !== $title_slug ) {
+			return '';
+		}
+
+		if ( $this->service_slug_is_reserved( $base_slug ) ) {
+			return '';
+		}
+
+		$post_parent = (int) $post->post_parent;
+		if ( $this->service_slug_conflicts_with_service_page( $base_slug, (int) $post->ID, $post_parent ) ) {
+			return '';
+		}
+
+		if ( ! $this->attachment_slug_exists_for_parent( $base_slug, $post_parent ) ) {
+			return '';
+		}
+
+		return $base_slug;
+	}
+
+	private function service_slug_conflicts_with_service_page( string $slug, int $post_id, int $post_parent ): bool {
+		global $wpdb;
+
+		$conflict_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_name = %s AND post_type = %s AND ID <> %d AND post_parent = %d LIMIT 1",
+				$slug,
+				self::CPT,
+				$post_id,
+				$post_parent
+			)
+		);
+
+		return null !== $conflict_id;
+	}
+
+	private function attachment_slug_exists_for_parent( string $slug, int $post_parent ): bool {
+		global $wpdb;
+
+		$attachment_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_name = %s AND post_type = 'attachment' AND post_parent = %d LIMIT 1",
+				$slug,
+				$post_parent
+			)
+		);
+
+		return null !== $attachment_id;
+	}
+
+	private function service_slug_is_reserved( string $slug ): bool {
+		global $wp_rewrite;
+
+		if ( 'embed' === $slug ) {
+			return true;
+		}
+
+		if ( $wp_rewrite instanceof \WP_Rewrite && \is_array( $wp_rewrite->feeds ) ) {
+			return \in_array( $slug, $wp_rewrite->feeds, true );
+		}
+
+		return false;
 	}
 
 	public function title_placeholder( string $placeholder, \WP_Post $post ): string {

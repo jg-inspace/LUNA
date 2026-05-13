@@ -45,6 +45,7 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 = 2.5.4 =
 * Keep Astra submenu backgrounds visible on NOVA Blog and Service CPT pages.
 * Prevent Astra archive layout classes from squeezing NOVA Blog CPT archive cards.
+* Prevent media attachment slugs from forcing Service CPT URLs to receive numeric suffixes such as -3.
 * Add optional Body Clean allowlist selectors for preserving extra frontend elements.
 
 = 2.5.3 =
