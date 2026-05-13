@@ -1,15 +1,13 @@
 ( function ( wp ) {
 	const { registerPlugin } = wp.plugins;
 	const { PluginDocumentSettingPanel } = wp.editPost;
-	const { TextControl, TextareaControl, Button, Notice } = wp.components;
+	const { TextControl, TextareaControl, Button } = wp.components;
 	const { MediaUpload } = wp.blockEditor || wp.editor;
-	const { __, sprintf } = wp.i18n;
+	const { __ } = wp.i18n;
 	const { useSelect, useDispatch } = wp.data;
-	const { Fragment, useEffect, useMemo } = wp.element;
+	const { Fragment } = wp.element;
 	const sidebarSettings = window.serviceCptSidebar || {};
 	const componentVisibility = sidebarSettings.components || {};
-	const CTA_SAVE_LOCK = 'service-cpt-empty-ctas';
-	const CTA_NOTICE_ID = 'service-cpt-empty-ctas-notice';
 	const showHeroSection = componentVisibility.hero !== false;
 	const showIntroSection = componentVisibility.intro !== false;
 	const showContentSection = componentVisibility.content !== false;
@@ -31,54 +29,6 @@
 	const isTemplateOneFlow = mainTextSlots === 2 && imageSlots === 1;
 	const bulletSlots = [ 0, 1, 2 ];
 	const faqSlots = [ 0, 1, 2, 3 ];
-	const hasText = ( value ) => {
-		const text = String( value || '' ).trim();
-		return text !== '' && text !== '0';
-	};
-	const stripHtml = ( value ) => String( value || '' ).replace( /<[^>]*>/g, '' );
-	const hasCompleteLink = ( label, url ) => hasText( label ) && hasText( url );
-	const getMissingCtaSections = ( meta ) => {
-		const missing = [];
-
-		if (
-			showHeroSection &&
-			showHeroCtaFields &&
-			! hasCompleteLink( meta.sp_hero_primary_label, meta.sp_hero_primary_url ) &&
-			! hasCompleteLink( meta.sp_hero_secondary_label, meta.sp_hero_secondary_url )
-		) {
-			missing.push( __( 'Hero CTA', 'service-cpt' ) );
-		}
-
-		if (
-			showSidebarCtaSection &&
-			showSidebarCtaFields &&
-			! hasText( meta.sp_sidebar_image ) &&
-			! hasText( meta.sp_sidebar_title ) &&
-			! hasText( stripHtml( meta.sp_sidebar_copy ) ) &&
-			! hasCompleteLink( meta.sp_sidebar_primary_label, meta.sp_sidebar_primary_url ) &&
-			! hasCompleteLink( meta.sp_sidebar_secondary_label, meta.sp_sidebar_secondary_url )
-		) {
-			missing.push( __( 'Sidebar CTA', 'service-cpt' ) );
-		}
-
-		const wideBullets = Array.isArray( meta.sp_cta_bullets ) ? meta.sp_cta_bullets : [];
-		if (
-			showWideCtaSection &&
-			showWideCtaFields &&
-			! hasText( meta.sp_cta_title ) &&
-			! wideBullets.some( hasText ) &&
-			! hasCompleteLink( meta.sp_cta_button_label, meta.sp_cta_button_url ) &&
-			! hasCompleteLink( meta.sp_cta_more_text, meta.sp_cta_more_url )
-		) {
-			missing.push( __( 'Wide CTA', 'service-cpt' ) );
-		}
-
-		return missing;
-	};
-	const getMissingCtaMessage = ( missing ) => sprintf(
-		__( 'Fill in the CTA fields before saving this service page. Missing: %s. You can also configure global CTAs in Settings > Service Pages.', 'service-cpt' ),
-		missing.join( ', ' )
-	);
 	const formatTable = ( table ) => {
 		if ( ! Array.isArray( table ) ) {
 			return '';
@@ -114,46 +64,7 @@
 			[]
 		);
 
-		const { editPost, lockPostSaving, unlockPostSaving } = useDispatch( 'core/editor' );
-		const { createErrorNotice, removeNotice } = useDispatch( 'core/notices' );
-		const missingCtas = useMemo(
-			() => ( postType === 'service_page' ? getMissingCtaSections( meta ) : [] ),
-			[ meta, postType ]
-		);
-		const missingCtaMessage = missingCtas.length ? getMissingCtaMessage( missingCtas ) : '';
-
-		useEffect( () => {
-			if ( missingCtaMessage ) {
-				if ( lockPostSaving ) {
-					lockPostSaving( CTA_SAVE_LOCK );
-				}
-
-				if ( createErrorNotice ) {
-					createErrorNotice( missingCtaMessage, {
-						id: CTA_NOTICE_ID,
-						isDismissible: true,
-					} );
-				}
-
-				return () => {
-					if ( unlockPostSaving ) {
-						unlockPostSaving( CTA_SAVE_LOCK );
-					}
-					if ( removeNotice ) {
-						removeNotice( CTA_NOTICE_ID );
-					}
-				};
-			}
-
-			if ( unlockPostSaving ) {
-				unlockPostSaving( CTA_SAVE_LOCK );
-			}
-			if ( removeNotice ) {
-				removeNotice( CTA_NOTICE_ID );
-			}
-
-			return () => {};
-		}, [ missingCtaMessage ] );
+		const { editPost } = useDispatch( 'core/editor' );
 
 		if ( postType !== 'service_page' ) {
 			return null;
@@ -188,12 +99,6 @@
 				title={ __( 'Service Page Fields', 'service-cpt' ) }
 				className="service-cpt-settings-panel"
 			>
-				{ missingCtaMessage && (
-					<Notice status="error" isDismissible={ false }>
-						{ missingCtaMessage }
-					</Notice>
-				) }
-
 				{ showImagesSection && (
 					<div style={ { display: 'flex', gap: '8px', marginBottom: '12px' } }>
 						{ imageSlots >= 1 && (

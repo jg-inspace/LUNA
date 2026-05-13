@@ -237,7 +237,6 @@ final class Plugin {
 	private $inline_style_queue = [];
 	private $late_inline_style_queue = [];
 	private $late_inline_styles_hooked = false;
-	private $applying_template_content = false;
 
 	/**
 	 * Bootstraps the plugin.
@@ -295,13 +294,8 @@ final class Plugin {
 		\add_action( 'add_meta_boxes', [ $this, 'register_meta_box' ] );
 		\add_action( 'save_post_' . self::CPT, [ $this, 'ensure_template_content_on_save' ], 5, 3 );
 		\add_action( 'save_post_' . self::CPT, [ $this, 'save_meta_box' ], 10, 2 );
-		\add_filter( 'wp_insert_post_data', [ $this, 'validate_service_page_ctas_before_insert' ], 1, 4 );
 		\add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
 		\add_action( 'admin_init', [ $this, 'redirect_all_language_admin_scope' ], 0 );
-		\add_action( 'admin_init', [ $this, 'maybe_block_classic_cta_save' ], 1 );
-		\add_action( 'admin_init', [ $this, 'maybe_block_bulk_cta_save' ], 1 );
-		\add_action( 'admin_notices', [ $this, 'render_classic_cta_save_notice' ] );
-		\add_action( 'wp_ajax_inline-save', [ $this, 'maybe_block_inline_cta_save' ], 0 );
 
 		\add_action( 'admin_menu', [ $this, 'register_settings_page' ] );
 		\add_action( 'admin_init', [ $this, 'register_settings' ] );
@@ -981,9 +975,9 @@ final class Plugin {
 	 * Registers all meta fields for the CPT.
 	 */
 	public function register_meta_fields(): void {
-		$global_hero_cta = $this->global_hero_cta_has_displayable_content();
-		$global_sidebar_cta = $this->global_sidebar_cta_has_displayable_content();
-		$global_wide_cta = $this->global_wide_cta_has_displayable_content();
+		$global_hero_cta = $this->cta_has_content( $this->get_global_hero_cta() );
+		$global_sidebar_cta = $this->cta_has_content( $this->get_global_sidebar_cta() );
+		$global_wide_cta = $this->cta_has_content( $this->get_global_wide_cta() );
 		$hero_cta_keys = [
 			'sp_hero_primary_label',
 			'sp_hero_primary_url',
@@ -1522,16 +1516,14 @@ final class Plugin {
 			'components'          => $component_flags,
 			'mainTextSlots'       => $template_one ? 2 : 3,
 			'imageSlots'          => $template_one ? 1 : 2,
-			'showHeroCtaFields'   => ! $this->global_hero_cta_has_displayable_content(),
-			'showSidebarCtaFields'=> ! $this->global_sidebar_cta_has_displayable_content(),
-			'showWideCtaFields'   => ! $this->global_wide_cta_has_displayable_content(),
+			'showHeroCtaFields'   => ! $this->cta_has_content( $this->get_global_hero_cta() ),
+			'showSidebarCtaFields'=> ! $this->cta_has_content( $this->get_global_sidebar_cta() ),
+			'showWideCtaFields'   => ! $this->cta_has_content( $this->get_global_wide_cta() ),
 		];
 
 		\wp_enqueue_style( 'service-cpt-editor' );
-		\wp_enqueue_script( 'service-cpt-cta-validation' );
 		\wp_enqueue_script( 'service-cpt-block' );
 		\wp_enqueue_script( 'service-cpt-sidebar' );
-		\wp_localize_script( 'service-cpt-cta-validation', 'serviceCptValidation', $editor_payload );
 		\wp_localize_script( 'service-cpt-sidebar', 'serviceCptSidebar', $editor_payload );
 		\wp_localize_script( 'service-cpt-block', 'serviceCptBlock', $editor_payload );
 	}
@@ -1610,16 +1602,8 @@ final class Plugin {
 		\wp_register_script(
 			'service-cpt-sidebar',
 			\plugins_url( 'assets/sidebar.js', __FILE__ ),
-			[ 'wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n', 'wp-block-editor', 'wp-notices' ],
+			[ 'wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n', 'wp-block-editor' ],
 			$version( 'assets/sidebar.js' ),
-			true
-		);
-
-		\wp_register_script(
-			'service-cpt-cta-validation',
-			\plugins_url( 'assets/cta-validation.js', __FILE__ ),
-			[ 'wp-data', 'wp-i18n', 'wp-notices', 'wp-dom-ready' ],
-			$version( 'assets/cta-validation.js' ),
 			true
 		);
 
@@ -3613,9 +3597,9 @@ final class Plugin {
 		$global_sidebar = $this->get_global_sidebar_cta();
 		$global_wide = $this->get_global_wide_cta();
 		$global_hero = $this->get_global_hero_cta();
-		$has_global_hero = $this->hero_cta_has_displayable_content( $global_hero );
-		$has_global_sidebar = $this->sidebar_cta_has_displayable_content( $global_sidebar );
-		$has_global_wide = $this->wide_cta_has_displayable_content( $global_wide );
+		$has_global_hero = $this->cta_has_content( $global_hero );
+		$has_global_sidebar = $this->cta_has_content( $global_sidebar );
+		$has_global_wide = $this->cta_has_content( $global_wide );
 		$show_hero_cta_editor = ! $has_global_hero;
 		$show_sidebar_cta_editor = ! $has_global_sidebar;
 		$show_wide_cta_editor = ! $has_global_wide;
@@ -5326,7 +5310,7 @@ final class Plugin {
 
 	private function get_archive_hero_cta(): array {
 		$global = $this->get_global_hero_cta();
-		if ( $this->hero_cta_has_displayable_content( $global ) ) {
+		if ( $this->cta_has_content( $global ) ) {
 			$label = (string) ( $global['primary_label'] ?? '' );
 			$url = (string) ( $global['primary_url'] ?? '' );
 
@@ -5352,7 +5336,7 @@ final class Plugin {
 
 	private function get_archive_wide_cta(): array {
 		$global = $this->get_global_wide_cta();
-		if ( $this->wide_cta_has_displayable_content( $global ) ) {
+		if ( $this->cta_has_content( $global ) ) {
 			return $global;
 		}
 
@@ -5400,23 +5384,6 @@ final class Plugin {
 		return false;
 	}
 
-	private function hero_cta_has_displayable_content( array $cta ): bool {
-		return $this->cta_link_has_content( $cta, 'primary_label', 'primary_url' )
-			|| $this->cta_link_has_content( $cta, 'secondary_label', 'secondary_url' );
-	}
-
-	private function global_hero_cta_has_displayable_content(): bool {
-		return $this->hero_cta_has_displayable_content( $this->get_global_hero_cta() );
-	}
-
-	private function global_sidebar_cta_has_displayable_content(): bool {
-		return $this->sidebar_cta_has_displayable_content( $this->get_global_sidebar_cta() );
-	}
-
-	private function global_wide_cta_has_displayable_content(): bool {
-		return $this->wide_cta_has_displayable_content( $this->get_global_wide_cta() );
-	}
-
 	private function cta_media_has_content( array $media ): bool {
 		return (int) ( $media['id'] ?? 0 ) > 0 || '' !== \trim( (string) ( $media['url'] ?? '' ) );
 	}
@@ -5444,107 +5411,6 @@ final class Plugin {
 			|| ! empty( $bullets )
 			|| $this->cta_link_has_content( $cta, 'button_label', 'button_url' )
 			|| $this->cta_link_has_content( $cta, 'more_text', 'more_url' );
-	}
-
-	private function get_missing_required_cta_sections( array $meta, string $template_slug ): array {
-		$missing = [];
-
-		if (
-			$this->template_component_active( $template_slug, 'hero' )
-			&& ! $this->global_hero_cta_has_displayable_content()
-		) {
-			$hero_cta = $this->get_effective_hero_cta( $meta );
-			if (
-				! $this->cta_link_has_content( $hero_cta, 'primary_label', 'primary_url' )
-				&& ! $this->cta_link_has_content( $hero_cta, 'secondary_label', 'secondary_url' )
-			) {
-				$missing[] = __( 'Hero CTA', 'nova-bridge-suite' );
-			}
-		}
-
-		if (
-			$this->template_component_active( $template_slug, 'cta_cover' )
-			&& ! $this->global_sidebar_cta_has_displayable_content()
-			&& ! $this->sidebar_cta_has_displayable_content( $this->build_sidebar_cta_from_meta( $meta ) )
-		) {
-			$missing[] = __( 'Sidebar CTA', 'nova-bridge-suite' );
-		}
-
-		if (
-			$this->template_component_active( $template_slug, 'cta_wide' )
-			&& ! $this->global_wide_cta_has_displayable_content()
-			&& ! $this->wide_cta_has_displayable_content( $this->build_wide_cta_from_meta( $meta ) )
-		) {
-			$missing[] = __( 'Wide CTA', 'nova-bridge-suite' );
-		}
-
-		return $missing;
-	}
-
-	private function get_missing_cta_validation_message( array $missing ): string {
-		return sprintf(
-			/* translators: %s: comma-separated list of missing CTA sections. */
-			__( 'Fill in the CTA fields before saving this service page. Missing: %s. You can also configure global CTAs in Settings > Service Pages.', 'nova-bridge-suite' ),
-			implode( ', ', $missing )
-		);
-	}
-
-	private function get_empty_meta_values(): array {
-		$meta = [];
-
-		foreach ( $this->get_meta_definitions() as $key => $definition ) {
-			switch ( $definition['type'] ) {
-				case 'integer':
-					$meta[ $key ] = 0;
-					break;
-				case 'array':
-					$meta[ $key ] = [];
-					break;
-				default:
-					$meta[ $key ] = '';
-					break;
-			}
-		}
-
-		return $meta;
-	}
-
-	private function get_rest_request_meta_values_for_validation( \WP_REST_Request $request, int $post_id ): array {
-		$meta = $post_id > 0 ? $this->get_meta_values( $post_id ) : $this->get_empty_meta_values();
-		$request_meta = $request->get_param( 'meta' );
-
-		if ( ! \is_array( $request_meta ) ) {
-			return $meta;
-		}
-
-		$definitions = $this->get_meta_definitions();
-
-		foreach ( $request_meta as $key => $value ) {
-			if ( ! isset( $definitions[ $key ] ) ) {
-				continue;
-			}
-
-			$meta[ $key ] = $this->sanitize_meta_value_for_validation( $value, $definitions[ $key ] );
-		}
-
-		return $meta;
-	}
-
-	private function sanitize_meta_value_for_validation( $value, array $definition ) {
-		$callback = $definition['sanitize_callback'] ?? null;
-
-		if ( \is_callable( $callback ) ) {
-			return \call_user_func( $callback, $value );
-		}
-
-		switch ( $definition['type'] ) {
-			case 'integer':
-				return \absint( $value );
-			case 'array':
-				return \is_array( $value ) ? $value : [];
-			default:
-				return \sanitize_text_field( (string) $value );
-		}
 	}
 
 	private function build_sidebar_cta_from_meta( array $meta ): array {
@@ -5579,7 +5445,7 @@ final class Plugin {
 	private function get_effective_hero_cta( array $meta ): array {
 		$global = $this->get_global_hero_cta();
 
-		if ( $this->hero_cta_has_displayable_content( $global ) ) {
+		if ( $this->cta_has_content( $global ) ) {
 			return $global;
 		}
 
@@ -5595,7 +5461,7 @@ final class Plugin {
 		$global = $this->get_global_sidebar_cta();
 		$local  = $this->build_sidebar_cta_from_meta( $meta );
 
-		if ( $this->sidebar_cta_has_displayable_content( $global ) ) {
+		if ( $this->cta_has_content( $global ) ) {
 			if ( $this->cta_media_has_content( $local['image'] ?? [] ) ) {
 				$global['image'] = $local['image'];
 			}
@@ -5609,7 +5475,7 @@ final class Plugin {
 	private function get_effective_wide_cta( array $meta ): array {
 		$global = $this->get_global_wide_cta();
 
-		if ( $this->wide_cta_has_displayable_content( $global ) ) {
+		if ( $this->cta_has_content( $global ) ) {
 			return $global;
 		}
 
@@ -8437,470 +8303,6 @@ final class Plugin {
 		}
 	}
 
-	public function validate_service_page_ctas_before_insert( array $data, array $postarr, array $unsanitized_postarr = [], bool $update = false ): array {
-		if ( ! $this->is_admin_cta_post_write_request() ) {
-			return $data;
-		}
-
-		$post_type = $this->get_post_write_post_type( $data, $postarr, $unsanitized_postarr );
-		if ( self::CPT !== $post_type ) {
-			return $data;
-		}
-
-		$post_id = $this->get_post_write_post_id( $postarr, $unsanitized_postarr );
-		if ( $this->should_skip_cta_validation_for_post_write( $post_id, $data, $postarr, $unsanitized_postarr ) ) {
-			return $data;
-		}
-
-		if ( $post_id > 0 ) {
-			if ( ! \current_user_can( 'edit_post', $post_id ) ) {
-				return $data;
-			}
-		} else {
-			$post_type_object = \get_post_type_object( self::CPT );
-			$edit_posts_cap = $post_type_object && isset( $post_type_object->cap->edit_posts )
-				? (string) $post_type_object->cap->edit_posts
-				: 'edit_posts';
-
-			if ( ! \current_user_can( $edit_posts_cap ) ) {
-				return $data;
-			}
-		}
-
-		$template_slug = $post_id > 0 ? $this->get_effective_template_slug( $post_id ) : $this->get_selected_template_slug();
-		$meta = $this->get_admin_posted_meta_values_for_validation( $post_id, $postarr, $unsanitized_postarr );
-		$missing_ctas = $this->get_missing_required_cta_sections( $meta, $template_slug );
-
-		if ( ! empty( $missing_ctas ) ) {
-			$this->fail_admin_cta_save( $post_id, $missing_ctas );
-		}
-
-		return $data;
-	}
-
-	private function is_admin_cta_post_write_request(): bool {
-		if ( $this->applying_template_content ) {
-			return false;
-		}
-
-		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-			return false;
-		}
-
-		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) && is_string( $_SERVER['REQUEST_METHOD'] )
-			? strtoupper( (string) $_SERVER['REQUEST_METHOD'] )
-			: '';
-
-		if ( 'POST' !== $request_method ) {
-			return false;
-		}
-
-		return \is_admin() || ( function_exists( 'wp_doing_ajax' ) && \wp_doing_ajax() );
-	}
-
-	private function get_post_write_post_id( array $postarr, array $unsanitized_postarr = [] ): int {
-		foreach ( [ $postarr, $unsanitized_postarr, $_POST, $_REQUEST ] as $source ) {
-			foreach ( [ 'ID', 'post_ID', 'post_id' ] as $key ) {
-				if ( isset( $source[ $key ] ) && is_scalar( $source[ $key ] ) ) {
-					$post_id = \absint( \wp_unslash( $source[ $key ] ) );
-					if ( $post_id > 0 ) {
-						return $post_id;
-					}
-				}
-			}
-		}
-
-		return 0;
-	}
-
-	private function get_post_write_post_type( array $data, array $postarr, array $unsanitized_postarr = [] ): string {
-		foreach ( [ $data, $postarr, $unsanitized_postarr, $_POST, $_REQUEST ] as $source ) {
-			if ( isset( $source['post_type'] ) && is_scalar( $source['post_type'] ) ) {
-				$post_type = \sanitize_key( \wp_unslash( (string) $source['post_type'] ) );
-				if ( '' !== $post_type ) {
-					return $post_type;
-				}
-			}
-		}
-
-		$post_id = $this->get_post_write_post_id( $postarr, $unsanitized_postarr );
-		if ( $post_id > 0 ) {
-			return (string) \get_post_type( $post_id );
-		}
-
-		return '';
-	}
-
-	private function should_skip_cta_validation_for_post_write( int $post_id, array $data, array $postarr, array $unsanitized_postarr = [] ): bool {
-		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-			return true;
-		}
-
-		if ( $post_id > 0 && ( \wp_is_post_autosave( $post_id ) || \wp_is_post_revision( $post_id ) ) ) {
-			return true;
-		}
-
-		foreach ( [ $data, $postarr, $unsanitized_postarr ] as $source ) {
-			if ( isset( $source['post_status'] ) && is_scalar( $source['post_status'] ) ) {
-				$status = \sanitize_key( \wp_unslash( (string) $source['post_status'] ) );
-				if ( in_array( $status, [ 'trash', 'auto-draft', 'inherit' ], true ) ) {
-					return true;
-				}
-			}
-		}
-
-		$action = isset( $_REQUEST['action'] ) && is_scalar( $_REQUEST['action'] )
-			? \sanitize_key( \wp_unslash( (string) $_REQUEST['action'] ) )
-			: '';
-
-		return in_array(
-			$action,
-			[
-				'autosave',
-				'heartbeat',
-				'sample-permalink',
-				'get-permalink',
-				'trash',
-				'delete',
-				'delete-post',
-				'untrash',
-			],
-			true
-		);
-	}
-
-	private function fail_admin_cta_save( int $post_id, array $missing_ctas ): void {
-		$message = $this->get_missing_cta_validation_message( $missing_ctas );
-
-		if ( function_exists( 'wp_doing_ajax' ) && \wp_doing_ajax() ) {
-			\wp_die(
-				\esc_html( $message ),
-				\esc_html__( 'Missing CTA fields', 'nova-bridge-suite' ),
-				[
-					'response' => 400,
-				]
-			);
-		}
-
-		$redirect = $this->get_admin_cta_validation_redirect_url( $post_id, $missing_ctas );
-		if ( '' !== $redirect ) {
-			\wp_safe_redirect( $redirect );
-			exit;
-		}
-
-		\wp_die(
-			\esc_html( $message ),
-			\esc_html__( 'Missing CTA fields', 'nova-bridge-suite' ),
-			[
-				'back_link' => true,
-				'response'  => 400,
-			]
-		);
-	}
-
-	private function get_admin_cta_validation_redirect_url( int $post_id, array $missing_ctas ): string {
-		if ( $this->is_bulk_edit_cta_request() || $post_id <= 0 ) {
-			$redirect = \admin_url( 'edit.php?post_type=' . self::CPT );
-		} else {
-			$redirect = \get_edit_post_link( $post_id, 'url' );
-			if ( ! $redirect ) {
-				$redirect = \admin_url( 'post.php?post=' . $post_id . '&action=edit' );
-			}
-		}
-
-		return (string) \add_query_arg(
-			[
-				'service_cpt_missing_ctas' => rawurlencode( implode( '|', $missing_ctas ) ),
-			],
-			\remove_query_arg( [ 'message', 'updated', 'bulk_edit', 'service_cpt_missing_ctas' ], $redirect )
-		);
-	}
-
-	private function is_bulk_edit_cta_request(): bool {
-		$action = isset( $_REQUEST['action'] ) && is_scalar( $_REQUEST['action'] )
-			? \sanitize_key( \wp_unslash( (string) $_REQUEST['action'] ) )
-			: '';
-		$action2 = isset( $_REQUEST['action2'] ) && is_scalar( $_REQUEST['action2'] )
-			? \sanitize_key( \wp_unslash( (string) $_REQUEST['action2'] ) )
-			: '';
-
-		return 'edit' === $action || 'edit' === $action2;
-	}
-
-	public function maybe_block_classic_cta_save(): void {
-		if ( ! \is_admin() ) {
-			return;
-		}
-
-		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) && is_string( $_SERVER['REQUEST_METHOD'] )
-			? strtoupper( (string) $_SERVER['REQUEST_METHOD'] )
-			: '';
-		if ( 'POST' !== $request_method ) {
-			return;
-		}
-
-		$action = isset( $_POST['action'] ) && is_scalar( $_POST['action'] )
-			? \sanitize_key( \wp_unslash( (string) $_POST['action'] ) )
-			: '';
-		$post_type = isset( $_POST['post_type'] ) && is_scalar( $_POST['post_type'] )
-			? \sanitize_key( \wp_unslash( (string) $_POST['post_type'] ) )
-			: '';
-		$post_id = isset( $_POST['post_ID'] ) ? \absint( \wp_unslash( $_POST['post_ID'] ) ) : 0;
-
-		if ( $post_id <= 0 ) {
-			return;
-		}
-
-		if ( '' === $post_type ) {
-			$post_type = (string) \get_post_type( $post_id );
-		}
-
-		if ( ! \in_array( $action, [ 'editpost', 'post' ], true ) || self::CPT !== $post_type ) {
-			return;
-		}
-
-		$nonce = isset( $_POST['_wpnonce'] ) && is_scalar( $_POST['_wpnonce'] )
-			? \sanitize_text_field( \wp_unslash( (string) $_POST['_wpnonce'] ) )
-			: '';
-		if ( '' === $nonce || ! \wp_verify_nonce( $nonce, 'update-post_' . $post_id ) ) {
-			return;
-		}
-
-		if ( ! \current_user_can( 'edit_post', $post_id ) ) {
-			return;
-		}
-
-		$template_slug = $this->get_effective_template_slug( $post_id );
-		$meta = $this->get_classic_posted_meta_values_for_validation( $post_id );
-		$missing_ctas = $this->get_missing_required_cta_sections( $meta, $template_slug );
-
-		if ( empty( $missing_ctas ) ) {
-			return;
-		}
-
-		$this->fail_admin_cta_save( $post_id, $missing_ctas );
-	}
-
-	public function render_classic_cta_save_notice(): void {
-		if ( empty( $_GET['service_cpt_missing_ctas'] ) || ! is_scalar( $_GET['service_cpt_missing_ctas'] ) ) {
-			return;
-		}
-
-		$missing = rawurldecode( (string) \wp_unslash( $_GET['service_cpt_missing_ctas'] ) );
-		$missing = array_filter(
-			array_map(
-				static function ( $value ) {
-					return \sanitize_text_field( (string) $value );
-				},
-				explode( '|', $missing )
-			)
-		);
-
-		if ( empty( $missing ) ) {
-			return;
-		}
-
-		printf(
-			'<div class="notice notice-error"><p>%s</p></div>',
-			\esc_html( $this->get_missing_cta_validation_message( array_values( $missing ) ) )
-		);
-	}
-
-	public function maybe_block_inline_cta_save(): void {
-		$post_id = isset( $_POST['post_ID'] ) ? \absint( \wp_unslash( $_POST['post_ID'] ) ) : 0;
-		if ( $post_id <= 0 ) {
-			return;
-		}
-
-		$post_type = isset( $_POST['post_type'] ) && is_scalar( $_POST['post_type'] )
-			? \sanitize_key( \wp_unslash( (string) $_POST['post_type'] ) )
-			: '';
-		if ( '' === $post_type ) {
-			$post_type = (string) \get_post_type( $post_id );
-		}
-
-		if ( self::CPT !== $post_type ) {
-			return;
-		}
-
-		$nonce = isset( $_POST['_inline_edit'] ) && is_scalar( $_POST['_inline_edit'] )
-			? \sanitize_text_field( \wp_unslash( (string) $_POST['_inline_edit'] ) )
-			: '';
-		if ( '' === $nonce || ! \wp_verify_nonce( $nonce, 'inlineeditnonce' ) ) {
-			return;
-		}
-
-		if ( ! \current_user_can( 'edit_post', $post_id ) ) {
-			return;
-		}
-
-		$template_slug = $this->get_effective_template_slug( $post_id );
-		$missing_ctas = $this->get_missing_required_cta_sections( $this->get_meta_values( $post_id ), $template_slug );
-
-		if ( empty( $missing_ctas ) ) {
-			return;
-		}
-
-		// Core inline-edit JavaScript displays non-row text inside the Quick Edit error notice.
-		\wp_die(
-			\esc_html( $this->get_missing_cta_validation_message( $missing_ctas ) ),
-			\esc_html__( 'Missing CTA fields', 'nova-bridge-suite' ),
-			[
-				'response' => 200,
-			]
-		);
-	}
-
-	public function maybe_block_bulk_cta_save(): void {
-		if ( ! \is_admin() ) {
-			return;
-		}
-
-		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) && is_string( $_SERVER['REQUEST_METHOD'] )
-			? strtoupper( (string) $_SERVER['REQUEST_METHOD'] )
-			: '';
-		if ( 'POST' !== $request_method ) {
-			return;
-		}
-
-		$action = isset( $_REQUEST['action'] ) && is_scalar( $_REQUEST['action'] )
-			? \sanitize_key( \wp_unslash( (string) $_REQUEST['action'] ) )
-			: '';
-		$action2 = isset( $_REQUEST['action2'] ) && is_scalar( $_REQUEST['action2'] )
-			? \sanitize_key( \wp_unslash( (string) $_REQUEST['action2'] ) )
-			: '';
-		if ( 'edit' !== $action && 'edit' !== $action2 ) {
-			return;
-		}
-
-		$post_type = isset( $_REQUEST['post_type'] ) && is_scalar( $_REQUEST['post_type'] )
-			? \sanitize_key( \wp_unslash( (string) $_REQUEST['post_type'] ) )
-			: '';
-		if ( self::CPT !== $post_type ) {
-			return;
-		}
-
-		$nonce = isset( $_REQUEST['_wpnonce'] ) && is_scalar( $_REQUEST['_wpnonce'] )
-			? \sanitize_text_field( \wp_unslash( (string) $_REQUEST['_wpnonce'] ) )
-			: '';
-		if ( '' === $nonce || ! \wp_verify_nonce( $nonce, 'bulk-posts' ) ) {
-			return;
-		}
-
-		$post_ids = isset( $_REQUEST['post'] ) ? (array) \wp_unslash( $_REQUEST['post'] ) : [];
-		$post_ids = array_filter(
-			array_map( 'absint', $post_ids ),
-			static function ( int $post_id ): bool {
-				return $post_id > 0;
-			}
-		);
-
-		if ( empty( $post_ids ) ) {
-			return;
-		}
-
-		$missing = [];
-		foreach ( $post_ids as $post_id ) {
-			if ( ! \current_user_can( 'edit_post', $post_id ) ) {
-				continue;
-			}
-
-			$template_slug = $this->get_effective_template_slug( $post_id );
-			$missing = array_merge(
-				$missing,
-				$this->get_missing_required_cta_sections( $this->get_meta_values( $post_id ), $template_slug )
-			);
-		}
-
-		$missing = array_values( array_unique( $missing ) );
-		if ( empty( $missing ) ) {
-			return;
-		}
-
-		$this->fail_admin_cta_save( 0, $missing );
-	}
-
-	private function get_classic_posted_meta_values_for_validation( int $post_id ): array {
-		return $this->get_admin_posted_meta_values_for_validation( $post_id );
-	}
-
-	private function get_admin_posted_meta_values_for_validation( int $post_id, array $postarr = [], array $unsanitized_postarr = [] ): array {
-		$meta = $post_id > 0 ? $this->get_meta_values( $post_id ) : $this->get_empty_meta_values();
-
-		if ( isset( $unsanitized_postarr['meta_input'] ) ) {
-			$meta = $this->overlay_meta_input_for_validation( $meta, $unsanitized_postarr['meta_input'] );
-		}
-
-		if ( isset( $postarr['meta_input'] ) ) {
-			$meta = $this->overlay_meta_input_for_validation( $meta, $postarr['meta_input'] );
-		}
-
-		$string_fields = [
-			'sp_hero_primary_label',
-			'sp_hero_primary_url',
-			'sp_hero_secondary_label',
-			'sp_hero_secondary_url',
-			'sp_sidebar_title',
-			'sp_sidebar_primary_label',
-			'sp_sidebar_primary_url',
-			'sp_sidebar_secondary_label',
-			'sp_sidebar_secondary_url',
-			'sp_cta_title',
-			'sp_cta_button_label',
-			'sp_cta_button_url',
-			'sp_cta_more_text',
-			'sp_cta_more_url',
-		];
-
-		foreach ( $string_fields as $field ) {
-			if ( isset( $_POST[ $field ] ) ) {
-				$meta[ $field ] = \sanitize_text_field( (string) \wp_unslash( $_POST[ $field ] ) );
-			}
-		}
-
-		if ( isset( $_POST['sp_sidebar_copy'] ) ) {
-			$meta['sp_sidebar_copy'] = $this->sanitize_rich_text( (string) \wp_unslash( $_POST['sp_sidebar_copy'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		}
-
-		if ( isset( $_POST['sp_sidebar_image'] ) ) {
-			$meta['sp_sidebar_image'] = \absint( \wp_unslash( $_POST['sp_sidebar_image'] ) );
-		}
-
-		$has_cta_bullets = false;
-		$bullets = [];
-		foreach ( [ 1, 2, 3 ] as $index ) {
-			$key = 'sp_cta_bullet_' . $index;
-			if ( isset( $_POST[ $key ] ) ) {
-				$has_cta_bullets = true;
-				$bullets[] = \sanitize_text_field( (string) \wp_unslash( $_POST[ $key ] ) );
-			}
-		}
-
-		if ( $has_cta_bullets ) {
-			$meta['sp_cta_bullets'] = self::sanitize_string_array( $bullets );
-		}
-
-		return $meta;
-	}
-
-	private function overlay_meta_input_for_validation( array $meta, $meta_input ): array {
-		if ( ! \is_array( $meta_input ) ) {
-			return $meta;
-		}
-
-		$definitions = $this->get_meta_definitions();
-
-		foreach ( $meta_input as $key => $value ) {
-			if ( ! isset( $definitions[ $key ] ) ) {
-				continue;
-			}
-
-			$meta[ $key ] = $this->sanitize_meta_value_for_validation( \wp_unslash( $value ), $definitions[ $key ] );
-		}
-
-		return $meta;
-	}
-
 	private function get_header_offset_setting( string $template_slug = '' ): string {
 		$stored = \get_option( self::OPTION_HEADER_OFFSET, self::DEFAULT_HEADER_OFFSET );
 
@@ -8954,14 +8356,12 @@ final class Plugin {
 		}
 
 		$updating = true;
-		$this->applying_template_content = true;
 		\wp_update_post(
 			[
 				'ID'           => $post_id,
 				'post_content' => \wp_slash( $template ),
 			]
 		);
-		$this->applying_template_content = false;
 		$updating = false;
 	}
 
@@ -8990,35 +8390,6 @@ final class Plugin {
 	}
 
 	public function rest_pre_insert_service_page( $prepared_post, \WP_REST_Request $request ) {
-		$request_status = $request->get_param( 'status' );
-		if ( \is_string( $request_status ) && 'trash' === \sanitize_key( $request_status ) ) {
-			return $prepared_post;
-		}
-
-		$post_id = (int) $request->get_param( 'id' );
-		if ( ! $post_id && $prepared_post instanceof \WP_Post ) {
-			$post_id = (int) $prepared_post->ID;
-		} elseif ( ! $post_id && \is_object( $prepared_post ) && isset( $prepared_post->ID ) ) {
-			$post_id = (int) $prepared_post->ID;
-		} elseif ( ! $post_id && \is_array( $prepared_post ) && isset( $prepared_post['ID'] ) ) {
-			$post_id = (int) $prepared_post['ID'];
-		}
-
-		$template_slug = $this->get_template_slug_from_request( $request );
-		$meta = $this->get_rest_request_meta_values_for_validation( $request, $post_id );
-		$missing_ctas = $this->get_missing_required_cta_sections( $meta, $template_slug );
-
-		if ( ! empty( $missing_ctas ) ) {
-			return new \WP_Error(
-				'service_cpt_missing_ctas',
-				$this->get_missing_cta_validation_message( $missing_ctas ),
-				[
-					'status'       => 400,
-					'missing_ctas' => $missing_ctas,
-				]
-			);
-		}
-
 		$post_content = '';
 		if ( $prepared_post instanceof \WP_Post ) {
 			$post_content = (string) $prepared_post->post_content;
@@ -9034,6 +8405,7 @@ final class Plugin {
 			return $prepared_post;
 		}
 
+		$template_slug = $this->get_template_slug_from_request( $request );
 		$template      = $this->get_template_content( $template_slug );
 
 		if ( '' === $template ) {
@@ -9327,9 +8699,9 @@ final class Plugin {
 		$note = $base;
 		$template_slug = '' !== $template_slug ? $template_slug : $this->get_selected_template_slug();
 		if (
-			$this->global_hero_cta_has_displayable_content()
-			|| $this->global_sidebar_cta_has_displayable_content()
-			|| $this->global_wide_cta_has_displayable_content()
+			$this->cta_has_content( $this->get_global_hero_cta() )
+			|| $this->cta_has_content( $this->get_global_sidebar_cta() )
+			|| $this->cta_has_content( $this->get_global_wide_cta() )
 		) {
 			$cta_note = __( 'Global CTAs are enabled; do not add CTA copy inside content fields.', 'nova-bridge-suite' );
 			$note = '' === $note ? $cta_note : $note . ' ' . $cta_note;
@@ -9431,12 +8803,12 @@ final class Plugin {
 		}
 
 		$has_sidebar_cta = $this->template_component_active( $template_slug, 'cta_cover' );
-		if ( $has_sidebar_cta && ! $this->global_sidebar_cta_has_displayable_content() ) {
+		if ( $has_sidebar_cta && ! $this->cta_has_content( $this->get_global_sidebar_cta() ) ) {
 			$keys = array_merge( $keys, $sidebar_keys );
 		}
 
 		$has_wide_cta = $this->template_component_active( $template_slug, 'cta_wide' );
-		if ( $has_wide_cta && ! $this->global_wide_cta_has_displayable_content() ) {
+		if ( $has_wide_cta && ! $this->cta_has_content( $this->get_global_wide_cta() ) ) {
 			$keys = array_merge( $keys, $wide_cta_keys );
 		}
 
@@ -9455,7 +8827,7 @@ final class Plugin {
 			$keys[] = 'sp_related_posts';
 		}
 
-		if ( $has_hero && $this->global_hero_cta_has_displayable_content() ) {
+		if ( $has_hero && $this->cta_has_content( $this->get_global_hero_cta() ) ) {
 			$keys = array_diff( $keys, $hero_cta_keys );
 		}
 
@@ -9657,7 +9029,7 @@ final class Plugin {
 			unset( $data['faq'] );
 		}
 
-		$global_hero_cta = $this->global_hero_cta_has_displayable_content();
+		$global_hero_cta = $this->cta_has_content( $this->get_global_hero_cta() );
 		if ( $global_hero_cta && isset( $data['hero'] ) && \is_array( $data['hero'] ) ) {
 			unset(
 				$data['hero']['primary_label'],
@@ -9667,12 +9039,12 @@ final class Plugin {
 			);
 		}
 
-		$global_sidebar_cta = $this->global_sidebar_cta_has_displayable_content();
+		$global_sidebar_cta = $this->cta_has_content( $this->get_global_sidebar_cta() );
 		if ( $global_sidebar_cta ) {
 			unset( $data['sidebar_cta'] );
 		}
 
-		$global_wide_cta = $this->global_wide_cta_has_displayable_content();
+		$global_wide_cta = $this->cta_has_content( $this->get_global_wide_cta() );
 		if ( $global_wide_cta ) {
 			unset( $data['wide_cta'] );
 		}
