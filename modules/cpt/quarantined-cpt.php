@@ -6451,7 +6451,7 @@ final class Plugin {
 	}
 
 	/**
-	 * Forces quarantined CPT routing when a conflicting page slug is present.
+	 * Forces quarantined CPT routing when a conflicting page or attachment slug is present.
 	 *
 	 * @param array $query_vars Parsed query variables.
 	 * @return array
@@ -6475,19 +6475,23 @@ final class Plugin {
 			return $query_vars;
 		}
 
-		if ( ! isset( $query_vars['pagename'] ) ) {
+		$author_base = self::author_archive_enabled() ? $this->get_author_base() : '';
+		$path        = isset( $query_vars['pagename'] )
+			? trim( (string) $query_vars['pagename'], '/' )
+			: $this->get_request_path_for_cpt_routing();
+		$path        = $this->sanitize_slug_path( $path );
+
+		if ( '' === $path ) {
 			return $query_vars;
 		}
 
-		$author_base = self::author_archive_enabled() ? $this->get_author_base() : '';
-		$path        = trim( (string) $query_vars['pagename'], '/' );
 		$segments = explode( '/', $path );
 
 		if ( '' !== $author_base && isset( $segments[0] ) && $segments[0] === $author_base ) {
 			$segment_count = count( $segments );
 
 			if ( 1 === $segment_count ) {
-				unset( $query_vars['pagename'] );
+				$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 				$query_vars['quarantined_cpt_authors'] = 1;
 
 				return $query_vars;
@@ -6496,7 +6500,7 @@ final class Plugin {
 			$second = (string) $segments[1];
 
 			if ( 'page' === $second && $segment_count >= 3 ) {
-				unset( $query_vars['pagename'] );
+				$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 				$query_vars['quarantined_cpt_authors'] = 1;
 				$query_vars['paged'] = (int) $segments[2];
 
@@ -6504,7 +6508,7 @@ final class Plugin {
 			}
 
 			if ( 'feed' === $second ) {
-				unset( $query_vars['pagename'] );
+				$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 				$query_vars['quarantined_cpt_authors'] = 1;
 				$query_vars['feed'] = $segment_count >= 3 ? (string) $segments[2] : 'feed';
 
@@ -6512,7 +6516,7 @@ final class Plugin {
 			}
 
 			if ( in_array( $second, [ 'rdf', 'rss', 'rss2', 'atom' ], true ) ) {
-				unset( $query_vars['pagename'] );
+				$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 				$query_vars['quarantined_cpt_authors'] = 1;
 				$query_vars['feed'] = $second;
 
@@ -6527,7 +6531,7 @@ final class Plugin {
 
 			$user = $this->find_author_by_slug( $slug );
 
-			unset( $query_vars['pagename'] );
+			$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 			$query_vars['quarantined_cpt_author'] = $user instanceof \WP_User ? $this->get_author_slug_for_user( $user ) : $slug;
 
 			if ( $user instanceof \WP_User ) {
@@ -6571,7 +6575,7 @@ final class Plugin {
 			}
 
 			if ( 1 === $segment_count ) {
-				unset( $query_vars['pagename'] );
+				$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 				$query_vars['post_type'] = $post_type;
 
 				return $query_vars;
@@ -6580,7 +6584,7 @@ final class Plugin {
 			$second = (string) $segments[1];
 
 			if ( 'page' === $second && $segment_count >= 3 ) {
-				unset( $query_vars['pagename'] );
+				$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 				$query_vars['post_type'] = $post_type;
 				$query_vars['paged']     = (int) $segments[2];
 
@@ -6588,7 +6592,7 @@ final class Plugin {
 			}
 
 			if ( 'feed' === $second || 0 === strpos( $second, 'feed' ) ) {
-				unset( $query_vars['pagename'] );
+				$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 				$query_vars['post_type'] = $post_type;
 				$query_vars['feed']      = $segment_count >= 3 ? $segments[2] : 'feed';
 
@@ -6607,12 +6611,78 @@ final class Plugin {
 				continue;
 			}
 
-			unset( $query_vars['pagename'] );
+			$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
 			$query_vars['post_type'] = $post_type;
 			$query_vars['p']         = (int) $matched_post->ID;
 			$query_vars['name']      = (string) $matched_post->post_name;
 
 			return $query_vars;
+		}
+
+		return $query_vars;
+	}
+
+	/**
+	 * Returns the current pretty permalink path when WordPress parsed it as another object type.
+	 *
+	 * @return string
+	 */
+	private function get_request_path_for_cpt_routing(): string {
+		global $wp;
+
+		$path = '';
+
+		if ( isset( $wp->request ) && is_string( $wp->request ) ) {
+			$path = $wp->request;
+		}
+
+		if ( '' === $path && isset( $_SERVER['REQUEST_URI'] ) ) {
+			$request_uri = (string) wp_unslash( $_SERVER['REQUEST_URI'] );
+			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
+
+			if ( is_string( $parsed_path ) ) {
+				$path = $parsed_path;
+			}
+		}
+
+		$path = rawurldecode( trim( $path, '/' ) );
+
+		if ( '' === $path ) {
+			return '';
+		}
+
+		$home_path = wp_parse_url( home_url( '/' ), PHP_URL_PATH );
+
+		if ( is_string( $home_path ) ) {
+			$home_path = trim( $home_path, '/' );
+
+			if ( '' !== $home_path ) {
+				if ( $path === $home_path ) {
+					return '';
+				}
+
+				if ( 0 === strpos( $path, $home_path . '/' ) ) {
+					$path = substr( $path, strlen( $home_path ) + 1 );
+				}
+			}
+		}
+
+		return trim( $path, '/' );
+	}
+
+	/**
+	 * Clears core page and attachment query vars before forcing a managed CPT route.
+	 *
+	 * @param array $query_vars Parsed query variables.
+	 * @return array
+	 */
+	private function clear_conflicting_route_query_vars( array $query_vars ): array {
+		foreach ( [ 'pagename', 'page_id', 'attachment', 'attachment_id', 'name', 'post_type', 'error' ] as $key ) {
+			unset( $query_vars[ $key ] );
+		}
+
+		foreach ( $this->get_cpt_types() as $post_type ) {
+			unset( $query_vars[ $post_type ] );
 		}
 
 		return $query_vars;
