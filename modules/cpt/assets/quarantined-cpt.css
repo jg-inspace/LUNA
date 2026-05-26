@@ -833,7 +833,7 @@ body.admin-bar.quarantined-cpt-author .quarantined-cpt__inner {
 
 .quarantined-cpt__grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 360px));
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
 	gap: clamp(1.25rem, 3vw, 2rem);
 	justify-content: start;
 	margin: 2rem 0;

@@ -2237,6 +2237,108 @@ final class Plugin {
 		return '' === $label ? $default : $label;
 	}
 
+	private function get_share_label_defaults(): array {
+		$map = [
+			'en' => [
+				'copy'   => 'Copy link',
+				'copied' => 'Copied',
+				'failed' => 'Copy failed',
+			],
+			'nl' => [
+				'copy'   => 'Kopieer link',
+				'copied' => 'Gekopieerd',
+				'failed' => 'Kopieren mislukt',
+			],
+			'de' => [
+				'copy'   => 'Link kopieren',
+				'copied' => 'Kopiert',
+				'failed' => 'Kopieren fehlgeschlagen',
+			],
+			'fr' => [
+				'copy'   => 'Copier le lien',
+				'copied' => 'Lien copie',
+				'failed' => 'Echec de la copie',
+			],
+			'es' => [
+				'copy'   => 'Copiar enlace',
+				'copied' => 'Copiado',
+				'failed' => 'Error al copiar',
+			],
+			'pt' => [
+				'copy'   => 'Copiar link',
+				'copied' => 'Copiado',
+				'failed' => 'Falha ao copiar',
+			],
+			'it' => [
+				'copy'   => 'Copia link',
+				'copied' => 'Copiato',
+				'failed' => 'Copia non riuscita',
+			],
+			'pl' => [
+				'copy'   => 'Kopiuj link',
+				'copied' => 'Skopiowano',
+				'failed' => 'Kopiowanie nie powiodlo sie',
+			],
+			'sv' => [
+				'copy'   => 'Kopiera lank',
+				'copied' => 'Kopierad',
+				'failed' => 'Kopiering misslyckades',
+			],
+			'da' => [
+				'copy'   => 'Kopier link',
+				'copied' => 'Kopieret',
+				'failed' => 'Kopiering mislykkedes',
+			],
+			'no' => [
+				'copy'   => 'Kopier lenke',
+				'copied' => 'Kopiert',
+				'failed' => 'Kopiering mislyktes',
+			],
+			'fi' => [
+				'copy'   => 'Kopioi linkki',
+				'copied' => 'Kopioitu',
+				'failed' => 'Kopiointi epaonnistui',
+			],
+			'cs' => [
+				'copy'   => 'Kopirovat odkaz',
+				'copied' => 'Zkopirovano',
+				'failed' => 'Kopirovani se nezdarilo',
+			],
+			'ro' => [
+				'copy'   => 'Copiaza linkul',
+				'copied' => 'Copiat',
+				'failed' => 'Copierea a esuat',
+			],
+			'tr' => [
+				'copy'   => 'Baglantiyi kopyala',
+				'copied' => 'Kopyalandi',
+				'failed' => 'Kopyalama basarisiz',
+			],
+		];
+
+		$language = $this->get_effective_label_language();
+
+		return isset( $map[ $language ] ) ? $map[ $language ] : $map['en'];
+	}
+
+	private function get_share_copy_label(): string {
+		$labels = $this->get_share_label_defaults();
+
+		return (string) $labels['copy'];
+	}
+
+	private function get_share_copied_label(): string {
+		$labels = $this->get_share_label_defaults();
+
+		return (string) $labels['copied'];
+	}
+
+	private function get_share_copy_failed_label(): string {
+		$labels = $this->get_share_label_defaults();
+
+		return (string) $labels['failed'];
+	}
+
 	private function get_faq_title_label(): string {
 		$defaults = $this->get_language_term_defaults();
 		$default  = isset( $defaults['faq_title'] ) ? (string) $defaults['faq_title'] : __( 'Frequently asked questions', 'nova-bridge-suite' );
@@ -5116,6 +5218,8 @@ final class Plugin {
 						'label' => [ 'type' => 'string' ],
 						'url'   => [ 'type' => 'string' ],
 						'copy'  => [ 'type' => 'boolean' ],
+						'success_label' => [ 'type' => 'string' ],
+						'error_label'   => [ 'type' => 'string' ],
 					],
 				],
 			],
@@ -5926,9 +6030,11 @@ final class Plugin {
 			],
 			[
 				'key'   => 'copy',
-				'label' => __( 'Kopieer link', 'nova-bridge-suite' ),
+				'label' => $this->get_share_copy_label(),
 				'url'   => $permalink,
 				'copy'  => true,
+				'success_label' => $this->get_share_copied_label(),
+				'error_label'   => $this->get_share_copy_failed_label(),
 			],
 		];
 	}

@@ -324,6 +324,8 @@ get_header();
 									$share_label = isset( $share_link['label'] ) ? (string) $share_link['label'] : '';
 									$share_url   = isset( $share_link['url'] ) ? (string) $share_link['url'] : '';
 									$is_copy     = ! empty( $share_link['copy'] );
+									$copy_success_label = isset( $share_link['success_label'] ) ? (string) $share_link['success_label'] : __( 'Copied', 'nova-bridge-suite' );
+									$copy_error_label   = isset( $share_link['error_label'] ) ? (string) $share_link['error_label'] : __( 'Copy failed', 'nova-bridge-suite' );
 									$icon_markup = \SEORAI\BodycleanCPT\Plugin::get_social_icon_markup( $share_key );
 									?>
 									<?php if ( $is_copy ) : ?>
@@ -332,8 +334,8 @@ get_header();
 											class="quarantined-cpt__share-link quarantined-cpt__share-link--copy"
 											data-copy-url="<?php echo esc_url( $share_url ); ?>"
 											data-copy-default-label="<?php echo esc_attr( $share_label ); ?>"
-											data-copy-success-label="<?php esc_attr_e( 'Gekopieerd', 'nova-bridge-suite' ); ?>"
-											data-copy-error-label="<?php esc_attr_e( 'Kopieren mislukt', 'nova-bridge-suite' ); ?>"
+											data-copy-success-label="<?php echo esc_attr( $copy_success_label ); ?>"
+											data-copy-error-label="<?php echo esc_attr( $copy_error_label ); ?>"
 											aria-label="<?php echo esc_attr( $share_label ); ?>"
 										>
 											<?php if ( $icon_markup ) : ?>
