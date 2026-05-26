@@ -49,7 +49,7 @@ Yes, NOVA can navigate WooCommerce products and categories. If WooCommerce is ac
 
 ### 2.5.7
 
-- Restore three-column NOVA Blog card grids on archive, author, and related-article sections where the 2.5.6 card sizing could collapse to two columns.
+- Restore three-column NOVA Blog card grids on archive, author, and related-article sections where the card sizing could collapse to two columns.
 - Localize the copy-link share button, success label, and failure label from the Blog CPT language setting.
 
 ### 2.5.6
