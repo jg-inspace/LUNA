@@ -2399,22 +2399,22 @@ final class Plugin {
 		add_rewrite_rule( '^' . $base . '/?$', 'index.php?quarantined_cpt_authors=1', 'top' );
 		add_rewrite_rule(
 			'^' . $base . '/([^/]+)/?$',
-			'index.php?author_name=$matches[1]&quarantined_cpt_author=$matches[1]',
+			'index.php?quarantined_cpt_author=$matches[1]',
 			'top'
 		);
 		add_rewrite_rule(
 			'^' . $base . '/([^/]+)/page/([0-9]+)/?$',
-			'index.php?author_name=$matches[1]&paged=$matches[2]&quarantined_cpt_author=$matches[1]',
+			'index.php?quarantined_cpt_author=$matches[1]&paged=$matches[2]',
 			'top'
 		);
 		add_rewrite_rule(
 			'^' . $base . '/([^/]+)/(feed|rdf|rss|rss2|atom)/?$',
-			'index.php?author_name=$matches[1]&feed=$matches[2]&quarantined_cpt_author=$matches[1]',
+			'index.php?quarantined_cpt_author=$matches[1]&feed=$matches[2]',
 			'top'
 		);
 		add_rewrite_rule(
 			'^' . $base . '/([^/]+)/feed/(feed|rdf|rss|rss2|atom)/?$',
-			'index.php?author_name=$matches[1]&feed=$matches[2]&quarantined_cpt_author=$matches[1]',
+			'index.php?quarantined_cpt_author=$matches[1]&feed=$matches[2]',
 			'top'
 		);
 	}
@@ -6390,7 +6390,10 @@ final class Plugin {
 				$query->set( 'author', $user->ID );
 				$query->set( 'author_name', $user->user_nicename );
 				$query->set( 'quarantined_cpt_author', $this->get_author_slug_for_user( $user ) );
-				$query->is_author = true;
+				$query->is_author  = true;
+				$query->is_archive = true;
+				$query->is_home    = false;
+				$query->is_404     = false;
 			}
 		}
 
@@ -6552,6 +6555,7 @@ final class Plugin {
 		$parts[] = $this->cpt_registration_enabled() ? 'cpts-on' : 'cpts-off';
 		$parts[] = $this->get_author_base();
 		$parts[] = self::author_archive_enabled() ? 'authors-on' : 'authors-off';
+		$parts[] = 'author-route-format:2';
 
 		return md5( implode( '|', $parts ) );
 	}
@@ -6577,7 +6581,24 @@ final class Plugin {
 			}
 		}
 
-		if ( isset( $query_vars['quarantined_cpt_authors'] ) || isset( $query_vars['quarantined_cpt_author'] ) ) {
+		if ( isset( $query_vars['quarantined_cpt_authors'] ) ) {
+			return $query_vars;
+		}
+
+		if ( isset( $query_vars['quarantined_cpt_author'] ) ) {
+			$custom_slug = $this->sanitize_author_slug( (string) $query_vars['quarantined_cpt_author'] );
+
+			if ( '' !== $custom_slug ) {
+				$user = $this->find_author_by_slug( $custom_slug );
+
+				if ( $user instanceof \WP_User ) {
+					$query_vars = $this->clear_conflicting_route_query_vars( $query_vars );
+					$query_vars['quarantined_cpt_author'] = $this->get_author_slug_for_user( $user );
+					$query_vars['author']                 = $user->ID;
+					$query_vars['author_name']            = $user->user_nicename;
+				}
+			}
+
 			return $query_vars;
 		}
 
