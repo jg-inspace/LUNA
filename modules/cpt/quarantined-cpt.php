@@ -1436,6 +1436,9 @@ final class Plugin {
 			$cta_after_payload = $payload['cta'];
 		}
 
+		$cta_before_copy = $cta_before_payload['copy'] ?? '';
+		$cta_after_copy  = $cta_after_payload['copy'] ?? '';
+
 		$cta_before_disabled = array_key_exists( 'cta_before_disabled', $payload )
 			? self::sanitize_blog_bool_flag( $payload['cta_before_disabled'] )
 			: true;
@@ -1445,7 +1448,7 @@ final class Plugin {
 
 		$defaults['cta_before'] = $this->build_effective_blog_cta_payload(
 			$this->sanitize_text_option( $cta_before_payload['title'] ?? '' ),
-			$this->sanitize_blog_rich_text( is_string( $cta_before_payload['copy'] ?? '' ) ? $cta_before_payload['copy'] : '' ),
+			$this->sanitize_blog_rich_text( is_string( $cta_before_copy ) ? $cta_before_copy : '' ),
 			$this->sanitize_text_option( $cta_before_payload['button_label'] ?? '' ),
 			self::sanitize_blog_cta_url( $cta_before_payload['button_url'] ?? '' ),
 			$cta_before_disabled,
@@ -1454,7 +1457,7 @@ final class Plugin {
 
 		$defaults['cta_after'] = $this->build_effective_blog_cta_payload(
 			$this->sanitize_text_option( $cta_after_payload['title'] ?? '' ),
-			$this->sanitize_blog_rich_text( is_string( $cta_after_payload['copy'] ?? '' ) ? $cta_after_payload['copy'] : '' ),
+			$this->sanitize_blog_rich_text( is_string( $cta_after_copy ) ? $cta_after_copy : '' ),
 			$this->sanitize_text_option( $cta_after_payload['button_label'] ?? '' ),
 			self::sanitize_blog_cta_url( $cta_after_payload['button_url'] ?? '' ),
 			$cta_after_disabled,

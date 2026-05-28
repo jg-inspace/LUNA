@@ -2,9 +2,9 @@
 Contributors: jg-inspace
 Tags: seo, automation, content, rest-api, page builder
 Requires at least: 6.0
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.5.8
+Stable tag: 2.5.9
 License: Proprietary
 
 Connects NOVA to WordPress so your SEO automation can update pages and layouts the standard API cannot reach.
@@ -41,6 +41,10 @@ Yes. If WooCommerce is active you can enable the rich text field module for cate
 1. NOVA Settings screen with module toggles.
 
 == Changelog ==
+
+= 2.5.9 =
+* Fix missing Blog archive CTA `copy` values causing PHP warnings.
+* Tested up to WordPress 7.0.
 
 = 2.5.8 =
 * Fix rare cases where plugin-managed author pages with custom slugs could 404 or fail to render the custom slug correctly on the live site.
